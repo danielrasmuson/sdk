@@ -1677,7 +1677,7 @@ class _HttpClient implements HttpClient {
       = new HashMap<String, _ConnectionTarget>();
   final List<_Credentials> _credentials = [];
   final List<_ProxyCredentials> _proxyCredentials = [];
-  final SecurityContext securityContext;
+  final SecurityContext _context;
   Function _authenticate;
   Function _authenticateProxy;
   Function _findProxy = HttpClient.findProxyFromEnvironment;
@@ -1692,7 +1692,7 @@ class _HttpClient implements HttpClient {
 
   String userAgent = _getHttpVersion();
 
-  _HttpClient(SecurityContext this.securityContext);
+  _HttpClient(SecurityContext this._context);
 
   void set idleTimeout(Duration timeout) {
     _idleTimeout = timeout;
@@ -1893,7 +1893,7 @@ class _HttpClient implements HttpClient {
   _ConnectionTarget _getConnectionTarget(String host, int port, bool isSecure) {
     String key = _HttpClientConnection.makeKey(isSecure, host, port);
     return _connectionTargets.putIfAbsent(key, () {
-      return new _ConnectionTarget(key, host, port, isSecure, securityContext);
+      return new _ConnectionTarget(key, host, port, isSecure, _context);
     });
   }
 

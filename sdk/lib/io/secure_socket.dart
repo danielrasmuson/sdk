@@ -508,8 +508,6 @@ class _RawSecureSocket extends Stream<RawSocketEvent>
       var encodedProtocols =
           SecurityContext._protocolsToLengthEncoding(supportedProtocols);
       _secureFilter.connect(address.host,
-                            (address as dynamic)._in_addr,
-                            port,
                             context,
                             is_server,
                             requestClientCertificate ||
@@ -1166,8 +1164,6 @@ abstract class _SecureFilter {
   external factory _SecureFilter();
 
   void connect(String hostName,
-               Uint8List addr,
-               int port,
                SecurityContext context,
                bool is_server,
                bool requestClientCertificate,

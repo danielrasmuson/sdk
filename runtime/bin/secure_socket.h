@@ -5,17 +5,19 @@
 #ifndef BIN_SECURE_SOCKET_H_
 #define BIN_SECURE_SOCKET_H_
 
+#ifdef DART_IO_SECURE_SOCKET_DISABLED
+#error "secure_socket.h can only be included on builds with SSL enabled"
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
 
-#if !defined(DART_IO_SECURE_SOCKET_DISABLED)
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/x509.h>
-#endif
 
 #include "bin/builtin.h"
 #include "bin/dartutils.h"
@@ -51,6 +53,7 @@ class SSLFilter {
 
   SSLFilter()
       : callback_error(NULL),
+        ssl_(NULL),
         string_start_(NULL),
         string_length_(NULL),
         handshake_complete_(NULL),
@@ -61,8 +64,6 @@ class SSLFilter {
 
   void Init(Dart_Handle dart_this);
   void Connect(const char* hostname,
-               const RawAddr& raw_addr,
-               int port,
                SSL_CTX* context,
                bool is_server,
                bool request_client_certificate,
@@ -80,11 +81,10 @@ class SSLFilter {
   Dart_Handle bad_certificate_callback() {
     return Dart_HandleFromPersistent(bad_certificate_callback_);
   }
-  intptr_t ProcessReadPlaintextBuffer(int start, int end);
-  intptr_t ProcessWritePlaintextBuffer(int start1, int end1,
-                                       int start2, int end2);
-  intptr_t ProcessReadEncryptedBuffer(int start, int end);
-  intptr_t ProcessWriteEncryptedBuffer(int start, int end);
+  int ProcessReadPlaintextBuffer(int start, int end);
+  int ProcessWritePlaintextBuffer(int start, int end);
+  int ProcessReadEncryptedBuffer(int start, int end);
+  int ProcessWriteEncryptedBuffer(int start, int end);
   bool ProcessAllBuffers(int starts[kNumBuffers],
                          int ends[kNumBuffers],
                          bool in_handshake);

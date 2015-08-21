@@ -122,21 +122,20 @@ class SecureServerSocket extends Stream<SecureSocket> {
  * See [RawSecureSocket] for more info.
  */
 class RawSecureServerSocket extends Stream<RawSecureSocket> {
-  RawServerSocket _socket;
+  final RawServerSocket _socket;
   StreamController<RawSecureSocket> _controller;
   StreamSubscription<RawSocket> _subscription;
-  SecurityContext context;
+  final SecurityContext _context;
   final bool requestClientCertificate;
   final bool requireClientCertificate;
   final List<String> supportedProtocols;
   bool _closed = false;
 
-  RawSecureServerSocket._(RawServerSocket serverSocket,
-                          SecurityContext this.context,
+  RawSecureServerSocket._(this._socket,
+                          this._context,
                           this.requestClientCertificate,
                           this.requireClientCertificate,
                           this.supportedProtocols) {
-    _socket = serverSocket;
     _controller = new StreamController<RawSecureSocket>(
         sync: true,
         onListen: _onSubscriptionStateChange,
@@ -257,7 +256,7 @@ class RawSecureServerSocket extends Stream<RawSecureSocket> {
     _RawSecureSocket.connect(
         connection.address,
         remotePort,
-        context: context,
+        context: _context,
         is_server: true,
         socket: connection,
         requestClientCertificate: requestClientCertificate,

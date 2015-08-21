@@ -77,8 +77,6 @@ class _SecureFilterImpl
   }
 
   void connect(String hostName,
-               Uint8List sockaddrStorage,
-               int port,
                SecurityContext context,
                bool is_server,
                bool requestClientCertificate,
@@ -179,6 +177,6 @@ class _X509CertificateImpl extends NativeFieldWrapperClass1
     return new DateTime.fromMillisecondsSinceEpoch(_endValidity(),
                                                    isUtc: true);
   }
-  DateTime _startValidity() native "X509_StartValidity";
-  DateTime _endValidity() native "X509_EndValidity";
+  int _startValidity() native "X509_StartValidity";
+  int _endValidity() native "X509_EndValidity";
 }

@@ -808,15 +808,18 @@ main() {
   testInvalidProxy();
   testDirectProxy();
   testProxy();
-  //  testProxyIPV6();
+  // testProxyIPV6();  // TODO(24074): Move failing tests to separate files.
   testProxyChain();
-  //testProxyFromEnviroment();
+  // TODO(24074): Move failing tests to separate files.
+  // testProxyFromEnviroment();
   // The two invocations of uses the same global variable for state -
   // run one after the other.
-  //testProxyAuthenticate(false)
+  // TODO(24074): Move failing tests to separate files.
+  // testProxyAuthenticate(false)
   //    .then((_) => testProxyAuthenticate(true));
+
   // This test is not normally run. It can be used for locally testing
   // with a real proxy server (e.g. Apache).
-  //testRealProxy();
-  //testRealProxyAuth();
+  // testRealProxy();
+  // testRealProxyAuth();
 }
