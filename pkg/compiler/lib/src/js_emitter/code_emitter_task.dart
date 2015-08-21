@@ -5,8 +5,6 @@
 part of dart2js.js_emitter;
 
 const USE_LAZY_EMITTER = const bool.fromEnvironment("dart2js.use.lazy.emitter");
-const USE_STARTUP_EMITTER =
-    const bool.fromEnvironment("dart2js.use.startup.emitter");
 
 /**
  * Generates the code for all used classes in the program. Static fields (even
@@ -35,15 +33,17 @@ class CodeEmitterTask extends CompilerTask {
   /// Contains a list of all classes that are emitted.
   Set<ClassElement> neededClasses;
 
-  CodeEmitterTask(Compiler compiler, Namer namer, bool generateSourceMap)
+  CodeEmitterTask(Compiler compiler, Namer namer, bool generateSourceMap,
+                  bool useStartupEmitter)
       : super(compiler),
         this.namer = namer,
         this.typeTestRegistry = new TypeTestRegistry(compiler) {
     nativeEmitter = new NativeEmitter(this);
     if (USE_LAZY_EMITTER) {
       emitter = new lazy_js_emitter.Emitter(compiler, namer, nativeEmitter);
-    } else if (USE_STARTUP_EMITTER) {
-      emitter = new startup_js_emitter.Emitter(compiler, namer, nativeEmitter);
+    } else if (useStartupEmitter) {
+      emitter = new startup_js_emitter.Emitter(
+          compiler, namer, nativeEmitter, generateSourceMap);
     } else {
       emitter =
           new full_js_emitter.Emitter(compiler, namer, generateSourceMap, this);
@@ -52,6 +52,10 @@ class CodeEmitterTask extends CompilerTask {
   }
 
   String get name => 'Code emitter';
+
+  /// Returns the string that is used to find library patches that are
+  /// specialized for the emitter.
+  String get patchVersion => emitter.patchVersion;
 
   /// Returns the closure expression of a static function.
   jsAst.Expression isolateStaticClosureAccess(FunctionElement element) {
@@ -148,6 +152,10 @@ class CodeEmitterTask extends CompilerTask {
 }
 
 abstract class Emitter {
+  /// Returns the string that is used to find library patches that are
+  /// specialized for this emitter.
+  String get patchVersion;
+
   /// Uses the [programBuilder] to generate a model of the program, emits
   /// the program, and returns the size of the generated output.
   int emitProgram(ProgramBuilder programBuilder);

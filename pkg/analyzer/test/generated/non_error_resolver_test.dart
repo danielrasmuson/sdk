@@ -10,14 +10,14 @@ import 'package:analyzer/src/generated/engine.dart';
 import 'package:analyzer/src/generated/error.dart';
 import 'package:analyzer/src/generated/parser.dart' show ParserErrorCode;
 import 'package:analyzer/src/generated/source_io.dart';
-import 'package:unittest/unittest.dart' as _ut;
 
 import '../reflective_tests.dart';
+import '../utils.dart';
 import 'resolver_test.dart';
 import 'test_support.dart';
 
 main() {
-  _ut.groupSep = ' | ';
+  initializeTestEnvironment();
   runReflectiveTests(NonErrorResolverTest);
 }
 
@@ -39,10 +39,14 @@ E e() {
 library L;
 export 'lib1.dart';
 export 'lib2.dart';''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library lib1;
 class M {}''');
-    addNamedSource("/lib2.dart", r'''
+    addNamedSource(
+        "/lib2.dart",
+        r'''
 library lib2;
 class N {}''');
     computeLibrarySourceErrors(source);
@@ -55,11 +59,15 @@ class N {}''');
 library L;
 export 'lib1.dart';
 export 'lib2.dart' hide B;''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library L1;
 class A {}
 class B {}''');
-    addNamedSource("/lib2.dart", r'''
+    addNamedSource(
+        "/lib2.dart",
+        r'''
 library L2;
 class B {}
 class C {}''');
@@ -73,11 +81,15 @@ class C {}''');
 library L;
 export 'lib1.dart';
 export 'lib2.dart' show C;''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library L1;
 class A {}
 class B {}''');
-    addNamedSource("/lib2.dart", r'''
+    addNamedSource(
+        "/lib2.dart",
+        r'''
 library L2;
 class B {}
 class C {}''');
@@ -91,7 +103,9 @@ class C {}''');
 library L;
 export 'lib.dart';
 export 'lib.dart';''');
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 class N {}''');
     computeLibrarySourceErrors(source);
@@ -109,15 +123,21 @@ main() {
   new N2();
   new N3();
 }''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library lib1;
 class N {}
 class N1 {}''');
-    addNamedSource("/lib2.dart", r'''
+    addNamedSource(
+        "/lib2.dart",
+        r'''
 library lib2;
 class N {}
 class N2 {}''');
-    addNamedSource("/lib3.dart", r'''
+    addNamedSource(
+        "/lib3.dart",
+        r'''
 library lib3;
 class N {}
 class N3 {}''');
@@ -133,11 +153,15 @@ main() {
   new N1();
   new N2();
 }''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library lib1;
 class N {}
 class N1 {}''');
-    addNamedSource("/lib2.dart", r'''
+    addNamedSource(
+        "/lib2.dart",
+        r'''
 library lib2;
 class N {}
 class N2 {}''');
@@ -321,7 +345,9 @@ import 'lib1.dart' as foo;
 main() {
   foo.x = true;
 }''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library lib1;
 bool x = false;''');
     computeLibrarySourceErrors(source);
@@ -1105,7 +1131,9 @@ const C = F;''');
   }
 
   void test_constEval_propertyExtraction_fieldStatic_targetType() {
-    addNamedSource("/math.dart", r'''
+    addNamedSource(
+        "/math.dart",
+        r'''
 library math;
 const PI = 3.14;''');
     Source source = addSource(r'''
@@ -1129,7 +1157,9 @@ const C = A.m;''');
   }
 
   void test_constEval_symbol() {
-    addNamedSource("/math.dart", r'''
+    addNamedSource(
+        "/math.dart",
+        r'''
 library math;
 const PI = 3.14;''');
     Source source = addSource(r'''
@@ -1336,7 +1366,9 @@ f() {
 library lib;
 import 'lib1.dart' hide B;
 A a = new A();''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library lib1;
 class A {}
 @deprecated
@@ -1413,6 +1445,18 @@ main() {
 main() {
   <int, int> {};
 }''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
+  void test_exportDuplicatedLibraryUnnamed() {
+    Source source = addSource(r'''
+library test;
+export 'lib1.dart';
+export 'lib2.dart';''');
+    addNamedSource("/lib1.dart", "");
+    addNamedSource("/lib2.dart", "");
     computeLibrarySourceErrors(source);
     assertNoErrors(source);
     verify([source]);
@@ -1936,12 +1980,30 @@ import 'lib.dart';''');
     verify([source]);
   }
 
+  void test_importDuplicatedLibraryUnnamed() {
+    Source source = addSource(r'''
+library test;
+import 'lib1.dart';
+import 'lib2.dart';''');
+    addNamedSource("/lib1.dart", "");
+    addNamedSource("/lib2.dart", "");
+    computeLibrarySourceErrors(source);
+    assertErrors(source, [
+      // No warning on duplicate import (https://github.com/dart-lang/sdk/issues/24156)
+      HintCode.UNUSED_IMPORT,
+      HintCode.UNUSED_IMPORT
+    ]);
+    verify([source]);
+  }
+
   void test_importOfNonLibrary_libraryDeclared() {
     Source source = addSource(r'''
 library lib;
 import 'part.dart';
 A a;''');
-    addNamedSource("/part.dart", r'''
+    addNamedSource(
+        "/part.dart",
+        r'''
 library lib1;
 class A {}''');
     computeLibrarySourceErrors(source);
@@ -1969,10 +2031,14 @@ main() {
   math.test1();
   path.test2();
 }''');
-    addNamedSource("/lib1.dart", r'''
+    addNamedSource(
+        "/lib1.dart",
+        r'''
 library lib1;
 test1() {}''');
-    addNamedSource("/lib2.dart", r'''
+    addNamedSource(
+        "/lib2.dart",
+        r'''
 library lib2;
 test2() {}''');
     computeLibrarySourceErrors(source);
@@ -2214,7 +2280,9 @@ import 'lib.dart';
 class B extends A {
   _m() {}
 }''');
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library L;
 class A {
   static var _m;
@@ -2230,7 +2298,9 @@ import 'lib.dart';
 class B extends A {
   _m() {}
 }''');
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library L;
 class A {
   static _m() {}
@@ -2252,7 +2322,9 @@ class A {
   }
 
   void test_invalidAnnotation_constantVariable_field_importWithPrefix() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 class A {
   static const C = 0;
@@ -2279,7 +2351,9 @@ main() {
   }
 
   void test_invalidAnnotation_constantVariable_topLevel_importWithPrefix() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 const C = 0;''');
     Source source = addSource(r'''
@@ -2293,7 +2367,9 @@ main() {
   }
 
   void test_invalidAnnotation_constConstructor_importWithPrefix() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 class A {
   const A(int p);
@@ -2309,7 +2385,9 @@ main() {
   }
 
   void test_invalidAnnotation_constConstructor_named_importWithPrefix() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 class A {
   const A.named(int p);
@@ -2637,7 +2715,9 @@ class B extends A {
   }
 
   void test_invalidOverrideReturnType_returnType_interface() {
-    Source source = addNamedSource("/test.dart", r'''
+    Source source = addNamedSource(
+        "/test.dart",
+        r'''
 abstract class A {
   num m();
 }
@@ -2650,7 +2730,9 @@ class B implements A {
   }
 
   void test_invalidOverrideReturnType_returnType_interface2() {
-    Source source = addNamedSource("/test.dart", r'''
+    Source source = addNamedSource(
+        "/test.dart",
+        r'''
 abstract class A {
   num m();
 }
@@ -2665,7 +2747,9 @@ class C implements B {
   }
 
   void test_invalidOverrideReturnType_returnType_mixin() {
-    Source source = addNamedSource("/test.dart", r'''
+    Source source = addNamedSource(
+        "/test.dart",
+        r'''
 class A {
   num m() { return 0; }
 }
@@ -2691,7 +2775,9 @@ class B extends A<dynamic> {
   }
 
   void test_invalidOverrideReturnType_returnType_sameType() {
-    Source source = addNamedSource("/test.dart", r'''
+    Source source = addNamedSource(
+        "/test.dart",
+        r'''
 class A {
   int m() { return 0; }
 }
@@ -2704,7 +2790,9 @@ class B extends A {
   }
 
   void test_invalidOverrideReturnType_returnType_superclass() {
-    Source source = addNamedSource("/test.dart", r'''
+    Source source = addNamedSource(
+        "/test.dart",
+        r'''
 class A {
   num m() { return 0; }
 }
@@ -2717,7 +2805,9 @@ class B extends A {
   }
 
   void test_invalidOverrideReturnType_returnType_superclass2() {
-    Source source = addNamedSource("/test.dart", r'''
+    Source source = addNamedSource(
+        "/test.dart",
+        r'''
 class A {
   num m() { return 0; }
 }
@@ -3140,6 +3230,19 @@ class B extends Object with A {}''');
     verify([source]);
   }
 
+  void test_mixinInheritsFromNotObject_classDeclaration_extends() {
+    AnalysisOptionsImpl options = new AnalysisOptionsImpl();
+    options.enableSuperMixins = true;
+    resetWithOptions(options);
+    Source source = addSource(r'''
+class A {}
+class B extends A {}
+class C extends Object with B {}''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
   void test_mixinInheritsFromNotObject_classDeclaration_mixTypeAlias() {
     Source source = addSource(r'''
 class A {}
@@ -3150,11 +3253,64 @@ class C extends Object with B {}''');
     verify([source]);
   }
 
+  void test_mixinInheritsFromNotObject_classDeclaration_with() {
+    AnalysisOptionsImpl options = new AnalysisOptionsImpl();
+    options.enableSuperMixins = true;
+    resetWithOptions(options);
+    Source source = addSource(r'''
+class A {}
+class B extends Object with A {}
+class C extends Object with B {}''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
+  void test_mixinInheritsFromNotObject_typeAlias_extends() {
+    AnalysisOptionsImpl options = new AnalysisOptionsImpl();
+    options.enableSuperMixins = true;
+    resetWithOptions(options);
+    Source source = addSource(r'''
+class A {}
+class B extends A {}
+class C = Object with B;''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
+  void test_mixinInheritsFromNotObject_typeAlias_with() {
+    AnalysisOptionsImpl options = new AnalysisOptionsImpl();
+    options.enableSuperMixins = true;
+    resetWithOptions(options);
+    Source source = addSource(r'''
+class A {}
+class B extends Object with A {}
+class C = Object with B;''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
   void test_mixinInheritsFromNotObject_typedef_mixTypeAlias() {
     Source source = addSource(r'''
 class A {}
 class B = Object with A;
 class C = Object with B;''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
+  void test_mixinReferencesSuper() {
+    AnalysisOptionsImpl options = new AnalysisOptionsImpl();
+    options.enableSuperMixins = true;
+    resetWithOptions(options);
+    Source source = addSource(r'''
+class A {
+  toString() => super.toString();
+}
+class B extends Object with A {}''');
     computeLibrarySourceErrors(source);
     assertNoErrors(source);
     verify([source]);
@@ -3934,7 +4090,9 @@ h(x) {}
   }
 
   void test_prefixCollidesWithTopLevelMembers() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 class A {}''');
     Source source = addSource(r'''
@@ -4883,7 +5041,9 @@ main() {
   }
 
   void test_typeType_class_prefixed() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 class C {}''');
     Source source = addSource(r'''
@@ -4910,7 +5070,9 @@ main() {
   }
 
   void test_typeType_functionTypeAlias_prefixed() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 typedef F();''');
     Source source = addSource(r'''
@@ -5002,12 +5164,14 @@ class Bar extends Foo {
     verify([source]);
   }
 
-  void test_undefinedGetter_typeLiteral_conditionalAccess() {
-    // When applied to a type literal, the conditional access operator '?.' can
-    // be used to access instance getters of Type.
+  void test_undefinedGetter_static_conditionalAccess() {
+    // The conditional access operator '?.' can be used to access static
+    // fields.
     Source source = addSource('''
-class A {}
-f() => A?.hashCode;
+class A {
+  static var x;
+}
+var a = A?.x;
 ''');
     computeLibrarySourceErrors(source);
     assertNoErrors(source);
@@ -5089,12 +5253,14 @@ main() {
     // A call to verify(source) fails as '(() => null)()' isn't resolved.
   }
 
-  void test_undefinedMethod_typeLiteral_conditionalAccess() {
-    // When applied to a type literal, the conditional access operator '?.' can
-    // be used to access instance methods of Type.
+  void test_undefinedMethod_static_conditionalAccess() {
+    // The conditional access operator '?.' can be used to access static
+    // methods.
     Source source = addSource('''
-class A {}
-f() => A?.toString();
+class A {
+  static void m() {}
+}
+f() { A?.m(); }
 ''');
     computeLibrarySourceErrors(source);
     assertNoErrors(source);
@@ -5126,7 +5292,9 @@ const B = ~((1 << A) - 1);''');
   }
 
   void test_undefinedSetter_importWithPrefix() {
-    addNamedSource("/lib.dart", r'''
+    addNamedSource(
+        "/lib.dart",
+        r'''
 library lib;
 set y(int value) {}''');
     Source source = addSource(r'''
@@ -5134,6 +5302,20 @@ import 'lib.dart' as x;
 main() {
   x.y = 0;
 }''');
+    computeLibrarySourceErrors(source);
+    assertNoErrors(source);
+    verify([source]);
+  }
+
+  void test_undefinedSetter_static_conditionalAccess() {
+    // The conditional access operator '?.' can be used to access static
+    // fields.
+    Source source = addSource('''
+class A {
+  static var x;
+}
+f() { A?.x = 1; }
+''');
     computeLibrarySourceErrors(source);
     assertNoErrors(source);
     verify([source]);

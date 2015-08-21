@@ -2,9 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-// This code was auto-generated, is not intended to be edited, and is subject to
-// significant change. Please see the README file for more information.
-
 library engine;
 
 import 'dart:async';
@@ -1118,7 +1115,9 @@ class AnalysisContextImpl implements InternalAnalysisContext {
         this._options.dart2jsHint != options.dart2jsHint ||
         (this._options.hint && !options.hint) ||
         this._options.preserveComments != options.preserveComments ||
-        this._options.enableStrictCallChecks != options.enableStrictCallChecks;
+        this._options.enableStrictCallChecks !=
+            options.enableStrictCallChecks ||
+        this._options.enableSuperMixins != options.enableSuperMixins;
     int cacheSize = options.cacheSize;
     if (this._options.cacheSize != cacheSize) {
       this._options.cacheSize = cacheSize;
@@ -1144,6 +1143,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     this._options.generateSdkErrors = options.generateSdkErrors;
     this._options.dart2jsHint = options.dart2jsHint;
     this._options.enableStrictCallChecks = options.enableStrictCallChecks;
+    this._options.enableSuperMixins = options.enableSuperMixins;
     this._options.hint = options.hint;
     this._options.incremental = options.incremental;
     this._options.incrementalApi = options.incrementalApi;
@@ -6149,6 +6149,12 @@ abstract class AnalysisOptions {
   bool get enableStrictCallChecks;
 
   /**
+   * Return `true` if mixins are allowed to inherit from types other than
+   * Object, and are allowed to reference `super`.
+   */
+  bool get enableSuperMixins;
+
+  /**
    * Return `true` if errors, warnings and hints should be generated for sources
    * that are implicitly being analyzed. The default value is `true`.
    */
@@ -6192,6 +6198,11 @@ abstract class AnalysisOptions {
    * Return `true` if analysis is to parse comments.
    */
   bool get preserveComments;
+
+  /**
+   * Return `true` if strong mode analysis should be used.
+   */
+  bool get strongMode;
 }
 
 /**
@@ -6233,7 +6244,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
    * A flag indicating whether analysis is to generate dart2js related hint
    * results.
    */
-  bool dart2jsHint = true;
+  bool dart2jsHint = false;
 
   /**
    * A flag indicating whether generic methods are to be supported (DEP 22).
@@ -6245,6 +6256,12 @@ class AnalysisOptionsImpl implements AnalysisOptions {
    * when generating warnings on "call" methods (fixes dartbug.com/21938).
    */
   bool enableStrictCallChecks = false;
+
+  /**
+   * A flag indicating whether mixins are allowed to inherit from types other
+   * than Object, and are allowed to reference `super`.
+   */
+  bool enableSuperMixins = false;
 
   /**
    * A flag indicating whether errors, warnings and hints should be generated
@@ -6292,6 +6309,11 @@ class AnalysisOptionsImpl implements AnalysisOptions {
   bool preserveComments = true;
 
   /**
+   * A flag indicating whether strong-mode analysis should be used.
+   */
+  bool strongMode = false;
+
+  /**
    * Initialize a newly created set of analysis options to have their default
    * values.
    */
@@ -6307,6 +6329,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     cacheSize = options.cacheSize;
     dart2jsHint = options.dart2jsHint;
     enableStrictCallChecks = options.enableStrictCallChecks;
+    enableSuperMixins = options.enableSuperMixins;
     generateImplicitErrors = options.generateImplicitErrors;
     generateSdkErrors = options.generateSdkErrors;
     hint = options.hint;
@@ -6315,6 +6338,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     incrementalValidation = options.incrementalValidation;
     lint = options.lint;
     preserveComments = options.preserveComments;
+    strongMode = options.strongMode;
   }
 
   /**
@@ -6326,6 +6350,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     cacheSize = options.cacheSize;
     dart2jsHint = options.dart2jsHint;
     enableStrictCallChecks = options.enableStrictCallChecks;
+    enableSuperMixins = options.enableSuperMixins;
     generateImplicitErrors = options.generateImplicitErrors;
     generateSdkErrors = options.generateSdkErrors;
     hint = options.hint;
@@ -6334,6 +6359,7 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     incrementalValidation = options.incrementalValidation;
     lint = options.lint;
     preserveComments = options.preserveComments;
+    strongMode = options.strongMode;
   }
 
   bool get analyzeFunctionBodies {
@@ -6700,8 +6726,7 @@ abstract class CachePartition {
    * [retentionPolicy] will be used to determine which pieces of data to remove
    * from the cache.
    */
-  CachePartition(this.context, int maxCacheSize, this._retentionPolicy) {
-    this._maxCacheSize = maxCacheSize;
+  CachePartition(this.context, this._maxCacheSize, this._retentionPolicy) {
     _recentlyUsed = new List<Source>();
   }
 
@@ -7358,11 +7383,7 @@ class CycleBuilder_LibraryPair {
   /**
    * Initialize a newly created pair from the given [library] and [entryPairs].
    */
-  CycleBuilder_LibraryPair(ResolvableLibrary library,
-      List<CycleBuilder_SourceEntryPair> entryPairs) {
-    this.library = library;
-    this.entryPairs = entryPairs;
-  }
+  CycleBuilder_LibraryPair(this.library, this.entryPairs);
 }
 
 /**
@@ -7384,10 +7405,7 @@ class CycleBuilder_SourceEntryPair {
   /**
    * Initialize a newly created pair from the given [source] and [entry].
    */
-  CycleBuilder_SourceEntryPair(Source source, DartEntry entry) {
-    this.source = source;
-    this.entry = entry;
-  }
+  CycleBuilder_SourceEntryPair(this.source, this.entry);
 }
 
 /**
@@ -8385,7 +8403,8 @@ class GenerateDartErrorsTask extends AnalysisTask {
       // Use the ErrorVerifier to compute the rest of the errors.
       //
       ErrorVerifier errorVerifier = new ErrorVerifier(errorReporter,
-          libraryElement, typeProvider, new InheritanceManager(libraryElement));
+          libraryElement, typeProvider, new InheritanceManager(libraryElement),
+          context.analysisOptions.enableSuperMixins);
       _unit.accept(errorVerifier);
       _errors = errorListener.getErrorsForSource(source);
     });
@@ -8944,13 +8963,8 @@ class IncrementalAnalysisCache {
   int _newLength = 0;
 
   IncrementalAnalysisCache(this.librarySource, this.source, this.resolvedUnit,
-      this.oldContents, String newContents, int offset, int oldLength,
-      int newLength) {
-    this._newContents = newContents;
-    this._offset = offset;
-    this._oldLength = oldLength;
-    this._newLength = newLength;
-  }
+      this.oldContents, this._newContents, this._offset, this._oldLength,
+      this._newLength);
 
   /**
    * Determine if the cache contains source changes that need to be analyzed
@@ -10820,8 +10834,9 @@ class ResolveDartUnitTask extends AnalysisTask {
     //
     PerformanceStatistics.errors.makeCurrentWhile(() {
       ErrorReporter errorReporter = new ErrorReporter(errorListener, source);
-      ErrorVerifier errorVerifier = new ErrorVerifier(
-          errorReporter, _libraryElement, typeProvider, inheritanceManager);
+      ErrorVerifier errorVerifier = new ErrorVerifier(errorReporter,
+          _libraryElement, typeProvider, inheritanceManager,
+          context.analysisOptions.enableSuperMixins);
       unit.accept(errorVerifier);
       // TODO(paulberry): as a temporary workaround for issue 21572,
       // ConstantVerifier is being run right after ConstantValueComputer, so we

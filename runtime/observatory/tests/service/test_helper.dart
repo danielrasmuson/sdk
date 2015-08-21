@@ -1,7 +1,6 @@
 // Copyright (c) 2013, the Dart project authors.  Please see the AUTHORS file
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
-// VMOptions=--compile_all --error_on_bad_type --error_on_bad_override --checked
 
 library test_helper;
 
@@ -27,9 +26,12 @@ class _TestLauncher {
                             Platform.script.toFilePath(),
                             _TESTEE_MODE_FLAG] {}
 
-  Future<int> launch(bool pause_on_exit) {
+  Future<int> launch(bool pause_on_start, bool pause_on_exit) {
     String dartExecutable = Platform.executable;
     var fullArgs = [];
+    if (pause_on_start == true) {
+      fullArgs.add('--pause-isolates-on-start');
+    }
     if (pause_on_exit == true) {
       fullArgs.add('--pause-isolates-on-exit');
     }
@@ -50,7 +52,7 @@ class _TestLauncher {
           var port = portExp.firstMatch(line).group(1);
           portNumber = int.parse(port);
         }
-        if (line == '') {
+        if (pause_on_start || line == '') {
           // Received blank line.
           blank = true;
         }
@@ -87,6 +89,10 @@ class _TestLauncher {
 typedef Future IsolateTest(Isolate isolate);
 typedef Future VMTest(VM vm);
 
+/// Will be set to the http address of the VM's service protocol before
+/// any tests are invoked.
+String serviceHttpAddress;
+
 /// Runs [tests] in sequence, each of which should take an [Isolate] and
 /// return a [Future]. Code for setting up state can run before and/or
 /// concurrently with the tests. Uses [mainArgs] to determine whether
@@ -95,24 +101,31 @@ void runIsolateTests(List<String> mainArgs,
                      List<IsolateTest> tests,
                      {void testeeBefore(),
                       void testeeConcurrent(),
-                      bool pause_on_exit}) {
+                      bool pause_on_start: false,
+                      bool pause_on_exit: false}) {
+  assert(!pause_on_start || testeeBefore == null);
   if (mainArgs.contains(_TESTEE_MODE_FLAG)) {
-    if (testeeBefore != null) {
-      testeeBefore();
+    if (!pause_on_start) {
+      if (testeeBefore != null) {
+        testeeBefore();
+      }
+      print(''); // Print blank line to signal that we are ready.
     }
-    print(''); // Print blank line to signal that we are ready.
     if (testeeConcurrent != null) {
       testeeConcurrent();
     }
-    // Wait around for the process to be killed.
-    stdin.first.then((_) => exit(0));
+    if (!pause_on_exit) {
+      // Wait around for the process to be killed.
+      stdin.first.then((_) => exit(0));
+    }
   } else {
     var process = new _TestLauncher();
-    process.launch(pause_on_exit).then((port) {
+    process.launch(pause_on_start, pause_on_exit).then((port) {
       if (mainArgs.contains("--gdb")) {
         port = 8181;
       }
       String addr = 'ws://localhost:$port/ws';
+      serviceHttpAddress = 'http://localhost:$port';
       var testIndex = 1;
       var totalTests = tests.length;
       var name = Platform.script.pathSegments.last;
@@ -136,26 +149,6 @@ void runIsolateTests(List<String> mainArgs,
 }
 
 
-// Cancel the subscription and complete the completer when finished processing
-// events.
-typedef void ServiceEventHandler(ServiceEvent event,
-                                 StreamSubscription subscription,
-                                 Completer completer);
-
-Future processServiceEvents(VM vm,
-                            String streamId,
-                            ServiceEventHandler handler) {
-  Completer completer = new Completer();
-  vm.getEventStream(streamId).then((stream) {
-    var subscription;
-    subscription = stream.listen((ServiceEvent event) {
-      handler(event, subscription, completer);
-    });
-  });
-  return completer.future;
-}
-
-
 Future<Isolate> hasStoppedAtBreakpoint(Isolate isolate) {
   // Set up a listener to wait for breakpoint events.
   Completer completer = new Completer();
@@ -167,7 +160,8 @@ Future<Isolate> hasStoppedAtBreakpoint(Isolate isolate) {
           print('Breakpoint reached');
           subscription.cancel();
           if (completer != null) {
-            completer.complete(isolate);
+            // Reload to update isolate.pauseEvent.
+            completer.complete(isolate.reload());
             completer = null;
           }
         }
@@ -215,6 +209,7 @@ IsolateTest stoppedAtLine(int line) {
     expect(stack['frames'].length, greaterThanOrEqualTo(1));
 
     Frame top = stack['frames'][0];
+    print("We are at $top");
     Script script = await top.location.script.load();
     expect(script.tokenToLine(top.location.tokenPos), equals(line));
   };
@@ -234,6 +229,30 @@ Future<Isolate> resumeIsolate(Isolate isolate) {
   });
   isolate.resume();
   return completer.future;
+}
+
+
+Future resumeAndAwaitEvent(Isolate isolate, stream, onEvent) async {
+  Completer completer = new Completer();
+  var sub;
+  sub = await isolate.vm.listenEventStream(
+    stream,
+    (ServiceEvent event) {
+      var r = onEvent(event);
+      if (r is! Future) {
+        r = new Future.value(r);
+      }
+      r.then((x) => sub.cancel().then((_) {
+        completer.complete();
+      }));
+    });
+  await isolate.resume();
+  return completer.future;
+}
+
+IsolateTest resumeIsolateAndAwaitEvent(stream, onEvent) {
+  return (Isolate isolate) async =>
+      resumeAndAwaitEvent(isolate, stream, onEvent);
 }
 
 
@@ -257,24 +276,30 @@ Future runVMTests(List<String> mainArgs,
                   List<VMTest> tests,
                   {Future testeeBefore(),
                    Future testeeConcurrent(),
-                   bool pause_on_exit}) async {
+                   bool pause_on_start: false,
+                   bool pause_on_exit: false}) async {
   if (mainArgs.contains(_TESTEE_MODE_FLAG)) {
-    if (testeeBefore != null) {
-      await testeeBefore();
+    if (!pause_on_start) {
+      if (testeeBefore != null) {
+        await testeeBefore();
+      }
+      print(''); // Print blank line to signal that we are ready.
     }
-    print(''); // Print blank line to signal that we are ready.
     if (testeeConcurrent != null) {
       await testeeConcurrent();
     }
-    // Wait around for the process to be killed.
-    stdin.first.then((_) => exit(0));
+    if (!pause_on_exit) {
+      // Wait around for the process to be killed.
+      stdin.first.then((_) => exit(0));
+    }
   } else {
     var process = new _TestLauncher();
-    process.launch(pause_on_exit).then((port) async {
+    process.launch(pause_on_start, pause_on_exit).then((port) async {
       if (mainArgs.contains("--gdb")) {
         port = 8181;
       }
       String addr = 'ws://localhost:$port/ws';
+      serviceHttpAddress = 'http://localhost:$port';
       var testIndex = 1;
       var totalTests = tests.length;
       var name = Platform.script.pathSegments.last;

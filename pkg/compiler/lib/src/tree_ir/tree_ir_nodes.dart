@@ -4,7 +4,6 @@
 
 library tree_ir_nodes;
 
-import '../constants/expressions.dart';
 import '../constants/values.dart' as values;
 import '../dart_types.dart' show DartType, InterfaceType, TypeVariableType;
 import '../elements/elements.dart';
@@ -363,6 +362,26 @@ class ApplyBuiltinOperator extends Expression {
   }
 }
 
+class ApplyBuiltinMethod extends Expression {
+  BuiltinMethod method;
+  Expression receiver;
+  List<Expression> arguments;
+
+  bool receiverIsNotNull;
+
+  ApplyBuiltinMethod(this.method, 
+                     this.receiver,
+                     this.arguments,
+                     {this.receiverIsNotNull: false});
+
+  accept(ExpressionVisitor visitor) {
+    return visitor.visitApplyBuiltinMethod(this);
+  }
+  accept1(ExpressionVisitor1 visitor, arg) {
+    return visitor.visitApplyBuiltinMethod(this, arg);
+  }
+}
+
 /// A conditional expression.
 class Conditional extends Expression {
   Expression condition;
@@ -427,7 +446,7 @@ class FunctionExpression extends Expression {
   }
 }
 
-/// A [LabeledStatement] or [WhileTrue] or [WhileCondition].
+/// A [LabeledStatement] or [WhileTrue] or [For].
 abstract class JumpTarget extends Statement {
   Label get label;
   Statement get body;
@@ -453,7 +472,7 @@ class LabeledStatement extends JumpTarget {
   }
 }
 
-/// A [WhileTrue] or [WhileCondition] loop.
+/// A [WhileTrue] or [For] loop.
 abstract class Loop extends JumpTarget {
 }
 
@@ -477,30 +496,36 @@ class WhileTrue extends Loop {
 }
 
 /**
- * A while loop with a condition. If the condition is false, control resumes
- * at the [next] statement.
+ * A loop with a condition and update expressions. If there are any update
+ * expressions, this generates a for loop, otherwise a while loop.
+ * 
+ * When the condition is false, control resumes at the [next] statement.
  *
  * It is NOT valid to target this statement with a [Break].
  * The only way to reach [next] is for the condition to evaluate to false.
  *
- * [WhileCondition] statements are introduced in the [LoopRewriter] and is
+ * [For] statements are introduced in the [LoopRewriter] and are
  * assumed not to occur before then.
  */
-class WhileCondition extends Loop {
+class For extends Loop {
   final Label label;
   Expression condition;
+  List<Expression> updates;
   Statement body;
   Statement next;
 
-  WhileCondition(this.label, this.condition, this.body,
-                 this.next) {
+  For(this.label,
+      this.condition,
+      this.updates,
+      this.body,
+      this.next) {
     assert(label.binding == null);
     label.binding = this;
   }
 
-  accept(StatementVisitor visitor) => visitor.visitWhileCondition(this);
+  accept(StatementVisitor visitor) => visitor.visitFor(this);
   accept1(StatementVisitor1 visitor, arg) {
-    return visitor.visitWhileCondition(this, arg);
+    return visitor.visitFor(this, arg);
   }
 }
 
@@ -528,7 +553,7 @@ class Break extends Jump {
 }
 
 /**
- * A continue to an enclosing [WhileTrue] or [WhileCondition] loop.
+ * A continue to an enclosing [WhileTrue] or [For] loop.
  * The continue targets the loop's body.
  */
 class Continue extends Jump {
@@ -695,8 +720,9 @@ class CreateInstance extends Expression {
 class GetField extends Expression {
   Expression object;
   Element field;
+  bool objectIsNotNull;
 
-  GetField(this.object, this.field);
+  GetField(this.object, this.field, {this.objectIsNotNull: false});
 
   accept(ExpressionVisitor visitor) => visitor.visitGetField(this);
   accept1(ExpressionVisitor1 visitor, arg) => visitor.visitGetField(this, arg);
@@ -815,8 +841,9 @@ class CreateInvocationMirror extends Expression {
 class Interceptor extends Expression {
   Expression input;
   Set<ClassElement> interceptedClasses;
+  final SourceInformation sourceInformation;
 
-  Interceptor(this.input, this.interceptedClasses);
+  Interceptor(this.input, this.interceptedClasses, this.sourceInformation);
 
   accept(ExpressionVisitor visitor) {
     return visitor.visitInterceptor(this);
@@ -894,6 +921,20 @@ class TypeExpression extends Expression {
   }
 }
 
+class Await extends Expression {
+  Expression input;
+
+  Await(this.input);
+
+  accept(ExpressionVisitor visitor) {
+    return visitor.visitAwait(this);
+  }
+
+  accept1(ExpressionVisitor1 visitor, arg) {
+    return visitor.visitAwait(this, arg);
+  }
+}
+
 abstract class ExpressionVisitor<E> {
   E visitExpression(Expression node) => node.accept(this);
   E visitVariableUse(VariableUse node);
@@ -923,10 +964,12 @@ abstract class ExpressionVisitor<E> {
   E visitCreateInvocationMirror(CreateInvocationMirror node);
   E visitInterceptor(Interceptor node);
   E visitApplyBuiltinOperator(ApplyBuiltinOperator node);
+  E visitApplyBuiltinMethod(ApplyBuiltinMethod node);
   E visitForeignExpression(ForeignExpression node);
   E visitGetLength(GetLength node);
   E visitGetIndex(GetIndex node);
   E visitSetIndex(SetIndex node);
+  E visitAwait(Await node);
 }
 
 abstract class ExpressionVisitor1<E, A> {
@@ -958,10 +1001,12 @@ abstract class ExpressionVisitor1<E, A> {
   E visitCreateInvocationMirror(CreateInvocationMirror node, A arg);
   E visitInterceptor(Interceptor node, A arg);
   E visitApplyBuiltinOperator(ApplyBuiltinOperator node, A arg);
+  E visitApplyBuiltinMethod(ApplyBuiltinMethod node, A arg);
   E visitForeignExpression(ForeignExpression node, A arg);
   E visitGetLength(GetLength node, A arg);
   E visitGetIndex(GetIndex node, A arg);
   E visitSetIndex(SetIndex node, A arg);
+  E visitAwait(Await node, A arg);
 }
 
 abstract class StatementVisitor<S> {
@@ -974,7 +1019,7 @@ abstract class StatementVisitor<S> {
   S visitContinue(Continue node);
   S visitIf(If node);
   S visitWhileTrue(WhileTrue node);
-  S visitWhileCondition(WhileCondition node);
+  S visitFor(For node);
   S visitExpressionStatement(ExpressionStatement node);
   S visitTry(Try node);
   S visitUnreachable(Unreachable node);
@@ -991,7 +1036,7 @@ abstract class StatementVisitor1<S, A> {
   S visitContinue(Continue node, A arg);
   S visitIf(If node, A arg);
   S visitWhileTrue(WhileTrue node, A arg);
-  S visitWhileCondition(WhileCondition node, A arg);
+  S visitFor(For node, A arg);
   S visitExpressionStatement(ExpressionStatement node, A arg);
   S visitTry(Try node, A arg);
   S visitUnreachable(Unreachable node, A arg);
@@ -1101,15 +1146,22 @@ abstract class RecursiveVisitor implements StatementVisitor, ExpressionVisitor {
     visitStatement(node.body);
   }
 
-  visitWhileCondition(WhileCondition node) {
+  visitFor(For node) {
     visitExpression(node.condition);
+    node.updates.forEach(visitExpression);
     visitStatement(node.body);
     visitStatement(node.next);
   }
 
-  visitExpressionStatement(ExpressionStatement node) {
-    visitExpression(node.expression);
-    visitStatement(node.next);
+  visitExpressionStatement(ExpressionStatement inputNode) {
+    // Iterate over chains of expression statements to avoid deep recursion.
+    Statement node = inputNode;
+    while (node is ExpressionStatement) {
+      ExpressionStatement stmt = node;
+      visitExpression(stmt.expression);
+      node = stmt.next;
+    }
+    visitStatement(node);
   }
 
   visitTry(Try node) {
@@ -1164,6 +1216,11 @@ abstract class RecursiveVisitor implements StatementVisitor, ExpressionVisitor {
     node.arguments.forEach(visitExpression);
   }
 
+  visitApplyBuiltinMethod(ApplyBuiltinMethod node) {
+    visitExpression(node.receiver);
+    node.arguments.forEach(visitExpression);
+  }
+
   visitInterceptor(Interceptor node) {
     visitExpression(node.input);
   }
@@ -1188,6 +1245,10 @@ abstract class RecursiveVisitor implements StatementVisitor, ExpressionVisitor {
     visitExpression(node.object);
     visitExpression(node.index);
     visitExpression(node.value);
+  }
+
+  visitAwait(Await node) {
+    visitExpression(node.input);
   }
 }
 
@@ -1317,17 +1378,27 @@ class RecursiveTransformer extends Transformer {
     return node;
   }
 
-  visitWhileCondition(WhileCondition node) {
+  visitFor(For node) {
     node.condition = visitExpression(node.condition);
+    _replaceExpressions(node.updates);
     node.body = visitStatement(node.body);
     node.next = visitStatement(node.next);
     return node;
   }
 
   visitExpressionStatement(ExpressionStatement node) {
-    node.expression = visitExpression(node.expression);
+    // Iterate over chains of expression statements to avoid deep recursion.
+    Statement first = node;
+    while (true) {
+      node.expression = visitExpression(node.expression);
+      if (node.next is ExpressionStatement) {
+        node = node.next;
+      } else {
+        break;
+      }
+    }
     node.next = visitStatement(node.next);
-    return node;
+    return first;
   }
 
   visitTry(Try node) {
@@ -1400,6 +1471,12 @@ class RecursiveTransformer extends Transformer {
     return node;
   }
 
+  visitApplyBuiltinMethod(ApplyBuiltinMethod node) {
+    node.receiver = visitExpression(node.receiver);
+    _replaceExpressions(node.arguments);
+    return node;
+  }
+
   visitInterceptor(Interceptor node) {
     node.input = visitExpression(node.input);
     return node;
@@ -1420,6 +1497,11 @@ class RecursiveTransformer extends Transformer {
     node.object = visitExpression(node.object);
     node.index = visitExpression(node.index);
     node.value = visitExpression(node.value);
+    return node;
+  }
+
+  visitAwait(Await node) {
+    node.input = visitExpression(node.input);
     return node;
   }
 }

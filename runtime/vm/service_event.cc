@@ -45,6 +45,7 @@ ServiceEvent::ServiceEvent(const DebuggerEvent* debugger_event)
   if (type == DebuggerEvent::kBreakpointReached) {
     set_breakpoint(debugger_event->breakpoint());
     set_async_continuation(debugger_event->async_continuation());
+    set_at_async_jump(debugger_event->at_async_jump());
   }
   if (type == DebuggerEvent::kExceptionThrown) {
     set_exception(debugger_event->exception());
@@ -89,6 +90,8 @@ const char* ServiceEvent::KindAsCString() const {
       return "Inspect";
     case kEmbedder:
       return embedder_kind();
+    case kLogging:
+      return "_Logging";
     case kDebuggerSettingsUpdate:
       return "_DebuggerSettingsUpdate";
     case kIllegal:
@@ -126,6 +129,9 @@ const char* ServiceEvent::stream_id() const {
     case kEmbedder:
       return embedder_stream_id_;
 
+    case kLogging:
+      return Service::logging_stream.id();
+
     default:
       UNREACHABLE();
       return NULL;
@@ -135,9 +141,7 @@ const char* ServiceEvent::stream_id() const {
 
 void ServiceEvent::PrintJSON(JSONStream* js) const {
   JSONObject jsobj(js);
-  jsobj.AddProperty("type", "Event");
-  jsobj.AddProperty("kind", KindAsCString());
-  jsobj.AddProperty("isolate", isolate());
+  PrintJSONHeader(&jsobj);
   if (kind() == kPauseBreakpoint) {
     JSONArray jsarr(&jsobj, "pauseBreakpoints");
     // TODO(rmacnak): If we are paused at more than one breakpoint,
@@ -163,8 +167,9 @@ void ServiceEvent::PrintJSON(JSONStream* js) const {
   if (exception() != NULL) {
     jsobj.AddProperty("exception", *(exception()));
   }
-  if (async_continuation() != NULL) {
+  if (async_continuation() != NULL && !async_continuation()->IsNull()) {
     jsobj.AddProperty("_asyncContinuation", *(async_continuation()));
+    jsobj.AddProperty("_atAsyncJump", at_async_jump());
   }
   if (inspectee() != NULL) {
     jsobj.AddProperty("inspectee", *(inspectee()));
@@ -177,6 +182,25 @@ void ServiceEvent::PrintJSON(JSONStream* js) const {
   if (bytes() != NULL) {
     jsobj.AddPropertyBase64("bytes", bytes(), bytes_length());
   }
+  if (kind() == kLogging) {
+    JSONObject logRecord(&jsobj, "logRecord");
+    logRecord.AddProperty64("sequenceNumber", log_record_.sequence_number);
+    logRecord.AddPropertyTimeMillis("time", log_record_.timestamp);
+    logRecord.AddProperty64("level", log_record_.level);
+    logRecord.AddProperty("loggerName", *(log_record_.name));
+    logRecord.AddProperty("message", *(log_record_.message));
+    logRecord.AddProperty("zone", *(log_record_.zone));
+    logRecord.AddProperty("error", *(log_record_.error));
+    logRecord.AddProperty("stackTrace", *(log_record_.stack_trace));
+  }
+}
+
+
+void ServiceEvent::PrintJSONHeader(JSONObject* jsobj) const {
+  ASSERT(jsobj != NULL);
+  jsobj->AddProperty("type", "Event");
+  jsobj->AddProperty("kind", KindAsCString());
+  jsobj->AddProperty("isolate", isolate());
 }
 
 }  // namespace dart

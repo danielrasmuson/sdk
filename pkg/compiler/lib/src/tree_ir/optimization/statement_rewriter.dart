@@ -165,7 +165,7 @@ class StatementRewriter extends Transformer implements Pass {
 
   /// Binding environment for variables that are assigned to effectively
   /// constant expressions (see [isEffectivelyConstant]).
-  final Map<Variable, Expression> constantEnvironment;
+  Map<Variable, Expression> constantEnvironment;
 
   /// Substitution map for labels. Any break to a label L should be substituted
   /// for a break to L' if L maps to L'.
@@ -209,10 +209,13 @@ class StatementRewriter extends Transformer implements Pass {
 
   void inEmptyEnvironment(void action()) {
     List oldEnvironment = environment;
+    Map oldConstantEnvironment = constantEnvironment;
     environment = <Expression>[];
+    constantEnvironment = <Variable, Expression>{};
     action();
     assert(environment.isEmpty);
     environment = oldEnvironment;
+    constantEnvironment = oldConstantEnvironment;
   }
 
   /// Left-hand side of the given assignment, or `null` if not an assignment.
@@ -364,7 +367,29 @@ class StatementRewriter extends Transformer implements Pass {
            isEffectivelyConstant(node.value);
   }
 
-  Statement visitExpressionStatement(ExpressionStatement stmt) {
+  Statement visitExpressionStatement(ExpressionStatement inputNode) {
+    // Analyze chains of expression statements.
+    // To avoid deep recursion, [processExpressionStatement] returns a callback
+    // to invoke after its successor node has been processed.
+    // These callbacks are stored in a list and invoked in reverse at the end.
+    List<Function> stack = [];
+    Statement node = inputNode;
+    while (node is ExpressionStatement) {
+      stack.add(processExpressionStatement(node));
+      node = node.next;
+    }
+    Statement result = visitStatement(node);
+    for (Function fun in stack.reversed) {
+      result = fun(result);
+    }
+    return result;
+  }
+
+  /// Attempts to propagate an assignment in an expression statement.
+  ///
+  /// Returns a callback to be invoked after the sucessor statement has
+  /// been processed.
+  Function processExpressionStatement(ExpressionStatement stmt) {
     Variable leftHand = getLeftHand(stmt.expression);
     pushDominatingAssignment(leftHand);
     if (isEffectivelyConstantAssignment(stmt.expression) &&
@@ -376,44 +401,50 @@ class StatementRewriter extends Transformer implements Pass {
       if (assign.variable.readCount == 1) {
         // A single-use constant should always be propagated to its use site.
         constantEnvironment[assign.variable] = assign.value;
-        Statement next = visitStatement(stmt.next);
-        popDominatingAssignment(leftHand);
-        if (assign.variable.readCount > 0) {
-          // The assignment could not be propagated into the successor, either
-          // because it has an unsafe variable use (see [hasUnsafeVariableUse])
-          // or because the use is outside the current try block, and we do
-          // not currently support constant propagation out of a try block.
-          constantEnvironment.remove(assign.variable);
-          assign.value = visitExpression(assign.value);
-          stmt.next = next;
-          return stmt;
-        } else {
-          --assign.variable.writeCount;
-          return next;
-        }
+        return (Statement next) {
+          popDominatingAssignment(leftHand);
+          if (assign.variable.readCount > 0) {
+            // The assignment could not be propagated into the successor,
+            // either because it [hasUnsafeVariableUse] or because the
+            // use is outside the current try block, and we do not currently
+            // support constant propagation out of a try block.
+            constantEnvironment.remove(assign.variable);
+            assign.value = visitExpression(assign.value);
+            stmt.next = next;
+            return stmt;
+          } else {
+            --assign.variable.writeCount;
+            return next;
+          }
+        };
       } else {
         // With more than one use, we cannot propagate the constant.
         // Visit the following statement without polluting [environment] so
         // that any preceding non-constant assignments might still propagate.
-        stmt.next = visitStatement(stmt.next);
-        popDominatingAssignment(leftHand);
-        assign.value = visitExpression(assign.value);
-        return stmt;
+        return (Statement next) {
+          stmt.next = next;
+          popDominatingAssignment(leftHand);
+          assign.value = visitExpression(assign.value);
+          return stmt;
+        };
       }
-    }
-    // Try to propagate the expression, and block previous impure expressions
-    // until this has propagated.
-    environment.add(stmt.expression);
-    stmt.next = visitStatement(stmt.next);
-    popDominatingAssignment(leftHand);
-    if (!environment.isEmpty && environment.last == stmt.expression) {
-      // Retain the expression statement.
-      environment.removeLast();
-      stmt.expression = visitExpression(stmt.expression);
-      return stmt;
     } else {
-      // Expression was propagated into the successor.
-      return stmt.next;
+      // Try to propagate the expression, and block previous impure expressions
+      // until this has propagated.
+      environment.add(stmt.expression);
+      return (Statement next) {
+        stmt.next = next;
+        popDominatingAssignment(leftHand);
+        if (!environment.isEmpty && environment.last == stmt.expression) {
+          // Retain the expression statement.
+          environment.removeLast();
+          stmt.expression = visitExpression(stmt.expression);
+          return stmt;
+        } else {
+          // Expression was propagated into the successor.
+          return stmt.next;
+        }
+      };
     }
   }
 
@@ -445,6 +476,21 @@ class StatementRewriter extends Transformer implements Pass {
   }
 
   Expression visitInvokeMethod(InvokeMethod node) {
+    if (node.receiverIsNotNull) {
+      _rewriteList(node.arguments);
+      node.receiver = visitExpression(node.receiver);
+    } else {
+      // Impure expressions cannot be propagated across the method lookup,
+      // because it throws when the receiver is null.
+      inEmptyEnvironment(() {
+        _rewriteList(node.arguments);
+      });
+      node.receiver = visitExpression(node.receiver);
+    }
+    return node;
+  }
+
+  Expression visitApplyBuiltinMethod(ApplyBuiltinMethod node) {
     if (node.receiverIsNotNull) {
       _rewriteList(node.arguments);
       node.receiver = visitExpression(node.receiver);
@@ -617,9 +663,9 @@ class StatementRewriter extends Transformer implements Pass {
     return node;
   }
 
-  Statement visitWhileCondition(WhileCondition node) {
+  Statement visitFor(For node) {
     // Not introduced yet
-    throw "Unexpected WhileCondition in StatementRewriter";
+    throw "Unexpected For in StatementRewriter";
   }
 
   Statement visitTry(Try node) {
@@ -794,15 +840,18 @@ class StatementRewriter extends Transformer implements Pass {
     BuiltinOperator commuted = commuteBinaryOperator(node.operator);
     if (commuted != null) {
       assert(node.arguments.length == 2); // Only binary operators can commute.
-      VariableUse arg1 = node.arguments[0];
-      VariableUse arg2 = node.arguments[1];
-      if (propagatableVariable == arg1.variable &&
-          propagatableVariable != arg2.variable &&
-          !constantEnvironment.containsKey(arg2.variable)) {
-        // An assignment can be propagated if we commute the operator.
-        node.operator = commuted;
-        node.arguments[0] = arg2;
-        node.arguments[1] = arg1;
+      Expression left = node.arguments[0];
+      if (left is VariableUse && propagatableVariable == left.variable) {
+        Expression right = node.arguments[1];
+        if (right is This ||
+            (right is VariableUse &&
+             propagatableVariable != right.variable &&
+             !constantEnvironment.containsKey(right.variable))) {
+          // An assignment can be propagated if we commute the operator.
+          node.operator = commuted;
+          node.arguments[0] = right;
+          node.arguments[1] = left;
+        }
       }
     }
     _rewriteList(node.arguments);
@@ -1073,6 +1122,11 @@ class StatementRewriter extends Transformer implements Pass {
   @override
   Statement visitForeignStatement(ForeignStatement node) {
     _rewriteList(node.arguments);
+    return node;
+  }
+
+  @override
+  Expression visitAwait(Await node) {
     return node;
   }
 }

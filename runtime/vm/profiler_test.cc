@@ -13,6 +13,25 @@
 
 namespace dart {
 
+DECLARE_FLAG(bool, profile_vm);
+
+// Some tests are written assuming native stack trace profiling is disabled.
+class DisableNativeProfileScope {
+ public:
+  DisableNativeProfileScope()
+      : FLAG_profile_vm_(FLAG_profile_vm) {
+    FLAG_profile_vm = false;
+  }
+
+  ~DisableNativeProfileScope() {
+    FLAG_profile_vm = FLAG_profile_vm_;
+  }
+
+ private:
+  const bool FLAG_profile_vm_;
+};
+
+
 class ProfileSampleBufferTestHelper {
  public:
   static intptr_t IterateCount(const Isolate* isolate,
@@ -113,19 +132,32 @@ class AllocationFilter : public SampleFilter {
  public:
   explicit AllocationFilter(Isolate* isolate, intptr_t cid)
       : SampleFilter(isolate),
-        cid_(cid) {
+        cid_(cid),
+        enable_embedder_ticks_(false) {
   }
 
   bool FilterSample(Sample* sample) {
-    return sample->is_allocation_sample() && (sample->allocation_cid() == cid_);
+    if (!enable_embedder_ticks_ &&
+        (sample->vm_tag() == VMTag::kEmbedderTagId)) {
+      // We don't want to see embedder ticks in the test.
+      return false;
+    }
+    return sample->is_allocation_sample() &&
+           (sample->allocation_cid() == cid_);
+  }
+
+  void set_enable_embedder_ticks(bool enable) {
+    enable_embedder_ticks_ = enable;
   }
 
  private:
   intptr_t cid_;
+  bool enable_embedder_ticks_;
 };
 
 
 TEST_CASE(Profiler_TrivialRecordAllocation) {
+  DisableNativeProfileScope dnps;
   const char* kScript =
       "class A {\n"
       "  var a;\n"
@@ -204,6 +236,7 @@ TEST_CASE(Profiler_TrivialRecordAllocation) {
 
 
 TEST_CASE(Profiler_ToggleRecordAllocation) {
+  DisableNativeProfileScope dnps;
   const char* kScript =
       "class A {\n"
       "  var a;\n"
@@ -314,7 +347,194 @@ TEST_CASE(Profiler_ToggleRecordAllocation) {
 }
 
 
+TEST_CASE(Profiler_CodeTicks) {
+  DisableNativeProfileScope dnps;
+  const char* kScript =
+      "class A {\n"
+      "  var a;\n"
+      "  var b;\n"
+      "}\n"
+      "class B {\n"
+      "  static boo() {\n"
+      "    return new A();\n"
+      "  }\n"
+      "}\n"
+      "main() {\n"
+      "  B.boo();\n"
+      "}\n";
+
+  Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
+  EXPECT_VALID(lib);
+  Library& root_library = Library::Handle();
+  root_library ^= Api::UnwrapHandle(lib);
+
+  const Class& class_a = Class::Handle(GetClass(root_library, "A"));
+  EXPECT(!class_a.IsNull());
+
+  Dart_Handle result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have no allocation samples.
+    EXPECT_EQ(0, profile.sample_count());
+  }
+
+  // Turn on allocation tracing for A.
+  class_a.SetTraceAllocation(true);
+
+  // Allocate three times.
+  result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+  result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+  result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have three allocation samples.
+    EXPECT_EQ(3, profile.sample_count());
+    ProfileTrieWalker walker(&profile);
+
+    // Exclusive code: B.boo -> main.
+    walker.Reset(Profile::kExclusiveCode);
+    // Move down from the root.
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(3, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("main", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+
+    // Inclusive code: main -> B.boo.
+    walker.Reset(Profile::kInclusiveCode);
+    // Move down from the root.
+    EXPECT(walker.Down());
+    EXPECT_STREQ("main", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(3, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+  }
+}
+
+
+TEST_CASE(Profiler_FunctionTicks) {
+  DisableNativeProfileScope dnps;
+  const char* kScript =
+      "class A {\n"
+      "  var a;\n"
+      "  var b;\n"
+      "}\n"
+      "class B {\n"
+      "  static boo() {\n"
+      "    return new A();\n"
+      "  }\n"
+      "}\n"
+      "main() {\n"
+      "  B.boo();\n"
+      "}\n";
+
+  Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
+  EXPECT_VALID(lib);
+  Library& root_library = Library::Handle();
+  root_library ^= Api::UnwrapHandle(lib);
+
+  const Class& class_a = Class::Handle(GetClass(root_library, "A"));
+  EXPECT(!class_a.IsNull());
+
+  Dart_Handle result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have no allocation samples.
+    EXPECT_EQ(0, profile.sample_count());
+  }
+
+  // Turn on allocation tracing for A.
+  class_a.SetTraceAllocation(true);
+
+  // Allocate three times.
+  result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+  result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+  result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have three allocation samples.
+    EXPECT_EQ(3, profile.sample_count());
+    ProfileTrieWalker walker(&profile);
+
+    // Exclusive function: B.boo -> main.
+    walker.Reset(Profile::kExclusiveFunction);
+    // Move down from the root.
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(3, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("main", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+
+    // Inclusive function: main -> B.boo.
+    walker.Reset(Profile::kInclusiveFunction);
+    // Move down from the root.
+    EXPECT(walker.Down());
+    EXPECT_STREQ("main", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(3, walker.CurrentNodeTickCount());
+    EXPECT_EQ(3, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(3, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+  }
+}
+
+
 TEST_CASE(Profiler_IntrinsicAllocation) {
+  DisableNativeProfileScope dnps;
   const char* kScript = "double foo(double a, double b) => a + b;";
   Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
   EXPECT_VALID(lib);
@@ -382,6 +602,7 @@ TEST_CASE(Profiler_IntrinsicAllocation) {
 
 
 TEST_CASE(Profiler_ArrayAllocation) {
+  DisableNativeProfileScope dnps;
   const char* kScript =
       "List foo() => new List(4);\n"
       "List bar() => new List();\n";
@@ -484,7 +705,148 @@ TEST_CASE(Profiler_ArrayAllocation) {
 }
 
 
+TEST_CASE(Profiler_ContextAllocation) {
+  DisableNativeProfileScope dnps;
+  const char* kScript =
+      "var msg1 = 'a';\n"
+      "foo() {\n"
+      "  var msg = msg1 + msg1;\n"
+      "  return (x) { return '$msg + $msg'; }(msg);\n"
+      "}\n";
+  Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
+  EXPECT_VALID(lib);
+  Library& root_library = Library::Handle();
+  root_library ^= Api::UnwrapHandle(lib);
+  Isolate* isolate = Isolate::Current();
+
+  const Class& context_class =
+      Class::Handle(Object::context_class());
+  EXPECT(!context_class.IsNull());
+
+  Dart_Handle result = Dart_Invoke(lib, NewString("foo"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, context_class.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have no allocation samples.
+    EXPECT_EQ(0, profile.sample_count());
+  }
+
+  context_class.SetTraceAllocation(true);
+  result = Dart_Invoke(lib, NewString("foo"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, context_class.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have one allocation sample.
+    EXPECT_EQ(1, profile.sample_count());
+    ProfileTrieWalker walker(&profile);
+
+    walker.Reset(Profile::kExclusiveCode);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("foo", walker.CurrentName());
+    EXPECT(!walker.Down());
+  }
+
+  context_class.SetTraceAllocation(false);
+  result = Dart_Invoke(lib, NewString("foo"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, context_class.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should still only have one allocation sample.
+    EXPECT_EQ(1, profile.sample_count());
+  }
+}
+
+
+TEST_CASE(Profiler_ClassAllocation) {
+  DisableNativeProfileScope dnps;
+  const char* kScript =
+      "var msg1 = 'a';\n"
+      "\n"
+      "foo() {\n"
+      "  var msg = msg1 + msg1;\n"
+      "  var msg2 = msg + msg;\n"
+      "  return (x, y, z, w) { return '$x + $y + $z'; }(msg, msg2, msg, msg);\n"
+      "}\n"
+      "bar() {\n"
+      "  var msg = msg1 + msg1;\n"
+      "  var msg2 = msg + msg;\n"
+      "  return (x, y) { return '$x + $y'; }(msg, msg2);\n"
+      "}\n";
+
+  Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
+  EXPECT_VALID(lib);
+  Library& root_library = Library::Handle();
+  root_library ^= Api::UnwrapHandle(lib);
+  Isolate* isolate = Isolate::Current();
+
+  const Class& class_class =
+      Class::Handle(Object::class_class());
+  EXPECT(!class_class.IsNull());
+  class_class.SetTraceAllocation(true);
+
+  // Invoke "foo" which during compilation, triggers a closure class allocation.
+  Dart_Handle result = Dart_Invoke(lib, NewString("foo"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_class.id());
+    filter.set_enable_embedder_ticks(true);
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have one allocation sample.
+    EXPECT_EQ(1, profile.sample_count());
+    ProfileTrieWalker walker(&profile);
+
+    walker.Reset(Profile::kExclusiveCode);
+    EXPECT(walker.Down());
+#if defined(TARGET_OS_WINDOWS)
+    // TODO(johnmccutchan): Hookup native symbol resolver on Windows.
+    EXPECT_SUBSTRING("[Native]", walker.CurrentName());
+#else
+    EXPECT_SUBSTRING("dart::Profiler::RecordAllocation", walker.CurrentName());
+#endif
+    EXPECT(!walker.Down());
+  }
+
+  // Disable allocation tracing for Class.
+  class_class.SetTraceAllocation(false);
+
+  // Invoke "bar" which during compilation, triggers a closure class allocation.
+  result = Dart_Invoke(lib, NewString("bar"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_class.id());
+    filter.set_enable_embedder_ticks(true);
+    profile.Build(&filter, Profile::kNoTags);
+    // We should still only have one allocation sample.
+    EXPECT_EQ(1, profile.sample_count());
+  }
+}
+
+
 TEST_CASE(Profiler_TypedArrayAllocation) {
+  DisableNativeProfileScope dnps;
   const char* kScript =
       "import 'dart:typed_data';\n"
       "List foo() => new Float32List(4);\n";
@@ -571,6 +933,7 @@ TEST_CASE(Profiler_TypedArrayAllocation) {
 
 
 TEST_CASE(Profiler_StringAllocation) {
+  DisableNativeProfileScope dnps;
   const char* kScript = "String foo(String a, String b) => a + b;";
   Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
   EXPECT_VALID(lib);
@@ -650,6 +1013,7 @@ TEST_CASE(Profiler_StringAllocation) {
 
 
 TEST_CASE(Profiler_StringInterpolation) {
+  DisableNativeProfileScope dnps;
   const char* kScript = "String foo(String a, String b) => '$a | $b';";
   Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
   EXPECT_VALID(lib);
@@ -731,4 +1095,248 @@ TEST_CASE(Profiler_StringInterpolation) {
   }
 }
 
+
+TEST_CASE(Profiler_FunctionInline) {
+  DisableNativeProfileScope dnps;
+  const char* kScript =
+      "class A {\n"
+      "  var a;\n"
+      "  var b;\n"
+      "}\n"
+      "class B {\n"
+      "  static choo(bool alloc) {\n"
+      "    if (alloc) return new A();\n"
+      "    return alloc && alloc && !alloc;\n"
+      "  }\n"
+      "  static foo(bool alloc) {\n"
+      "    choo(alloc);\n"
+      "  }\n"
+      "  static boo(bool alloc) {\n"
+      "    for (var i = 0; i < 50000; i++) {\n"
+      "      foo(alloc);\n"
+      "    }\n"
+      "  }\n"
+      "}\n"
+      "main() {\n"
+      "  B.boo(false);\n"
+      "}\n"
+      "mainA() {\n"
+      "  B.boo(true);\n"
+      "}\n";
+
+  Dart_Handle lib = TestCase::LoadTestScript(kScript, NULL);
+  EXPECT_VALID(lib);
+  Library& root_library = Library::Handle();
+  root_library ^= Api::UnwrapHandle(lib);
+
+  const Class& class_a = Class::Handle(GetClass(root_library, "A"));
+  EXPECT(!class_a.IsNull());
+
+  // Compile "main".
+  Dart_Handle result = Dart_Invoke(lib, NewString("main"), 0, NULL);
+  EXPECT_VALID(result);
+  // Compile "mainA".
+  result = Dart_Invoke(lib, NewString("mainA"), 0, NULL);
+  EXPECT_VALID(result);
+  // At this point B.boo should be optimized and inlined B.foo and B.choo.
+
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have no allocation samples.
+    EXPECT_EQ(0, profile.sample_count());
+  }
+
+  // Turn on allocation tracing for A.
+  class_a.SetTraceAllocation(true);
+
+  // Allocate 50,000 instances of A.
+  result = Dart_Invoke(lib, NewString("mainA"), 0, NULL);
+  EXPECT_VALID(result);
+
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter, Profile::kNoTags);
+    // We should have 50,000 allocation samples.
+    EXPECT_EQ(50000, profile.sample_count());
+    ProfileTrieWalker walker(&profile);
+    // We have two code objects: mainA and B.boo.
+    walker.Reset(Profile::kExclusiveCode);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(50000, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+    // We have two code objects: mainA and B.boo.
+    walker.Reset(Profile::kInclusiveCode);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(50000, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+
+    // Inline expansion should show us the complete call chain:
+    // mainA -> B.boo -> B.foo -> B.choo.
+    walker.Reset(Profile::kExclusiveFunction);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.choo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(50000, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.foo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+
+    // Inline expansion should show us the complete call chain:
+    // mainA -> B.boo -> B.foo -> B.choo.
+    walker.Reset(Profile::kInclusiveFunction);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.foo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(0, walker.CurrentExclusiveTicks());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.choo", walker.CurrentName());
+    EXPECT_EQ(1, walker.SiblingCount());
+    EXPECT_EQ(50000, walker.CurrentNodeTickCount());
+    EXPECT_EQ(50000, walker.CurrentInclusiveTicks());
+    EXPECT_EQ(50000, walker.CurrentExclusiveTicks());
+    EXPECT(!walker.Down());
+  }
+
+  // Test code transition tags.
+  {
+    Isolate* isolate = Isolate::Current();
+    StackZone zone(isolate);
+    HANDLESCOPE(isolate);
+    Profile profile(isolate);
+    AllocationFilter filter(isolate, class_a.id());
+    profile.Build(&filter,
+                  Profile::kNoTags,
+                  ProfilerService::kCodeTransitionTagsBit);
+    // We should have 50,000 allocation samples.
+    EXPECT_EQ(50000, profile.sample_count());
+    ProfileTrieWalker walker(&profile);
+    // We have two code objects: mainA and B.boo.
+    walker.Reset(Profile::kExclusiveCode);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Optimized Code]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Unoptimized Code]", walker.CurrentName());
+    EXPECT(!walker.Down());
+    // We have two code objects: mainA and B.boo.
+    walker.Reset(Profile::kInclusiveCode);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Unoptimized Code]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Optimized Code]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT(!walker.Down());
+
+    // Inline expansion should show us the complete call chain:
+    // mainA -> B.boo -> B.foo -> B.choo.
+    walker.Reset(Profile::kExclusiveFunction);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Inline End]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.choo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.foo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Inline Start]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Optimized Code]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Unoptimized Code]", walker.CurrentName());
+    EXPECT(!walker.Down());
+
+    // Inline expansion should show us the complete call chain:
+    // mainA -> B.boo -> B.foo -> B.choo.
+    walker.Reset(Profile::kInclusiveFunction);
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Unoptimized Code]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("mainA", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Optimized Code]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.boo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Inline Start]", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.foo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("B.choo", walker.CurrentName());
+    EXPECT(walker.Down());
+    EXPECT_STREQ("[Inline End]", walker.CurrentName());
+    EXPECT(!walker.Down());
+  }
+}
+
 }  // namespace dart
+

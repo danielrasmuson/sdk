@@ -2,9 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-// This code was auto-generated, is not intended to be edited, and is subject to
-// significant change. Please see the README file for more information.
-
 library engine.element_handle;
 
 import 'ast.dart';
@@ -513,6 +510,9 @@ abstract class ExecutableElementHandle extends ElementHandle
 
   @override
   List<FunctionElement> get functions => actualElement.functions;
+
+  @override
+  bool get hasImplicitReturnType => actualElement.hasImplicitReturnType;
 
   @override
   bool get isAbstract => actualElement.isAbstract;
@@ -1091,6 +1091,9 @@ abstract class VariableElementHandle extends ElementHandle
   VariableElement get actualElement => super.actualElement as VariableElement;
 
   @override
+  bool get hasImplicitType => actualElement.hasImplicitType;
+
+  @override
   FunctionElement get initializer => actualElement.initializer;
 
   @override
@@ -1110,6 +1113,7 @@ abstract class VariableElementHandle extends ElementHandle
   @override
   DartType get type => actualElement.type;
 }
+
 /**
  * TODO(scheglov) invalid implementation
  */

@@ -45,18 +45,22 @@ class RawFloat32x4;
 class RawFloat64x2;
 class RawFunction;
 class RawGrowableObjectArray;
+class RawICData;
 class RawImmutableArray;
+class RawInstructions;
 class RawInt32x4;
 class RawLanguageError;
 class RawLibrary;
 class RawLibraryPrefix;
 class RawLinkedHashMap;
 class RawLiteralToken;
+class RawMegamorphicCache;
 class RawMint;
 class RawMixinAppType;
 class RawBigint;
 class RawNamespace;
 class RawObject;
+class RawObjectPool;
 class RawOneByteString;
 class RawPatchClass;
 class RawReceivePort;
@@ -65,6 +69,7 @@ class RawScript;
 class RawSendPort;
 class RawSmi;
 class RawStacktrace;
+class RawSubtypeTestCache;
 class RawTokenStream;
 class RawTwoByteString;
 class RawType;
@@ -97,6 +102,9 @@ enum SerializedHeaderType {
 static const int8_t kHeaderTagBits = 2;
 static const int8_t kObjectIdBits = (kBitsPerInt32 - (kHeaderTagBits + 1));
 static const intptr_t kMaxObjectId = (kMaxUint32 >> (kHeaderTagBits + 1));
+static const bool kAsReference = true;
+static const bool kAsInlinedObject = false;
+static const intptr_t kInvalidPatchIndex = -1;
 
 
 class SerializedHeaderTag : public BitField<enum SerializedHeaderType,
@@ -248,21 +256,42 @@ class BaseReader {
 
 class BackRefNode : public ValueObject {
  public:
-  BackRefNode(Object* reference, DeserializeState state)
-      : reference_(reference), state_(state) {}
+  BackRefNode(Object* reference,
+              DeserializeState state,
+              bool defer_canonicalization)
+      : reference_(reference),
+        state_(state),
+        defer_canonicalization_(defer_canonicalization),
+        patch_records_(NULL) {}
   Object* reference() const { return reference_; }
   bool is_deserialized() const { return state_ == kIsDeserialized; }
   void set_state(DeserializeState state) { state_ = state; }
+  bool defer_canonicalization() const { return defer_canonicalization_; }
+  ZoneGrowableArray<intptr_t>* patch_records() const { return patch_records_; }
 
   BackRefNode& operator=(const BackRefNode& other) {
     reference_ = other.reference_;
     state_ = other.state_;
+    defer_canonicalization_ = other.defer_canonicalization_;
+    patch_records_ = other.patch_records_;
     return *this;
+  }
+
+  void AddPatchRecord(intptr_t patch_object_id, intptr_t patch_offset) {
+    if (defer_canonicalization_) {
+      if (patch_records_ == NULL) {
+        patch_records_ = new ZoneGrowableArray<intptr_t>();
+      }
+      patch_records_->Add(patch_object_id);
+      patch_records_->Add(patch_offset);
+    }
   }
 
  private:
   Object* reference_;
   DeserializeState state_;
+  bool defer_canonicalization_;
+  ZoneGrowableArray<intptr_t>* patch_records_;
 };
 
 
@@ -284,13 +313,16 @@ class SnapshotReader : public BaseReader {
   ExternalTypedData* DataHandle() { return &data_; }
   TypedData* TypedDataHandle() { return &typed_data_; }
   Snapshot::Kind kind() const { return kind_; }
-  bool allow_code() const { return false; }
+  bool snapshot_code() const { return snapshot_code_; }
 
   // Reads an object.
   RawObject* ReadObject();
 
   // Add object to backward references.
-  void AddBackRef(intptr_t id, Object* obj, DeserializeState state);
+  void AddBackRef(intptr_t id,
+                  Object* obj,
+                  DeserializeState state,
+                  bool defer_canonicalization = false);
 
   // Get an object from the backward references list.
   Object* GetBackRef(intptr_t id);
@@ -330,6 +362,11 @@ class SnapshotReader : public BaseReader {
   RawClosureData* NewClosureData();
   RawRedirectionData* NewRedirectionData();
   RawFunction* NewFunction();
+  RawCode* NewCode(intptr_t pointer_offsets_length);
+  RawObjectPool* NewObjectPool(intptr_t length);
+  RawICData* NewICData();
+  RawMegamorphicCache* NewMegamorphicCache();
+  RawSubtypeTestCache* NewSubtypeTestCache();
   RawField* NewField();
   RawLibrary* NewLibrary();
   RawLibraryPrefix* NewLibraryPrefix();
@@ -345,6 +382,8 @@ class SnapshotReader : public BaseReader {
   RawUnhandledException* NewUnhandledException();
   RawObject* NewInteger(int64_t value);
   RawStacktrace* NewStacktrace();
+
+  RawInstructions* GetInstructionsById(int32_t id);
 
  protected:
   SnapshotReader(const uint8_t* buffer,
@@ -367,24 +406,55 @@ class SnapshotReader : public BaseReader {
 
   RawClass* ReadClassId(intptr_t object_id);
   RawObject* ReadStaticImplicitClosure(intptr_t object_id, intptr_t cls_header);
-  RawObject* ReadObjectImpl();
-  RawObject* ReadObjectImpl(intptr_t header);
-  RawObject* ReadObjectRef();
+
+  // Implementation to read an object.
+  RawObject* ReadObjectImpl(bool as_reference,
+                            intptr_t patch_object_id = kInvalidPatchIndex,
+                            intptr_t patch_offset = 0);
+  RawObject* ReadObjectImpl(intptr_t header,
+                            bool as_reference,
+                            intptr_t patch_object_id,
+                            intptr_t patch_offset);
+
+  // Read an object reference from the stream.
+  RawObject* ReadObjectRef(intptr_t object_id,
+                           intptr_t class_header,
+                           intptr_t tags,
+                           intptr_t patch_object_id = kInvalidPatchIndex,
+                           intptr_t patch_offset = 0);
+
+  // Read an inlined object from the stream.
+  RawObject* ReadInlinedObject(intptr_t object_id,
+                               intptr_t class_header,
+                               intptr_t tags,
+                               intptr_t patch_object_id,
+                               intptr_t patch_offset);
 
   // Read a VM isolate object that was serialized as an Id.
   RawObject* ReadVMIsolateObject(intptr_t object_id);
 
   // Read an object that was serialized as an Id (singleton in object store,
   // or an object that was already serialized before).
-  RawObject* ReadIndexedObject(intptr_t object_id);
+  RawObject* ReadIndexedObject(intptr_t object_id,
+                               intptr_t patch_object_id,
+                               intptr_t patch_offset);
 
-  // Read an inlined object from the stream.
-  RawObject* ReadInlinedObject(intptr_t object_id);
+  // Add a patch record for the object so that objects whose canonicalization
+  // is deferred can be back patched after they are canonicalized.
+  void AddPatchRecord(intptr_t object_id,
+                      intptr_t patch_object_id,
+                      intptr_t patch_offset);
+
+  // Process all the deferred canonicalization entries and patch all references.
+  void ProcessDeferredCanonicalizations();
 
   // Decode class id from the header field.
   intptr_t LookupInternalClass(intptr_t class_header);
 
-  void ArrayReadFrom(const Array& result, intptr_t len, intptr_t tags);
+  void ArrayReadFrom(intptr_t object_id,
+                     const Array& result,
+                     intptr_t len,
+                     intptr_t tags);
 
   intptr_t NextAvailableObjectId() const;
 
@@ -392,7 +462,10 @@ class SnapshotReader : public BaseReader {
 
   RawObject* VmIsolateSnapshotObject(intptr_t index) const;
 
+  bool is_vm_isolate() const;
+
   Snapshot::Kind kind_;  // Indicates type of snapshot(full, script, message).
+  bool snapshot_code_;
   Isolate* isolate_;  // Current isolate.
   Zone* zone_;  // Zone for allocations while reading snapshot.
   Heap* heap_;  // Heap of the current isolate.
@@ -416,39 +489,44 @@ class SnapshotReader : public BaseReader {
 
   friend class ApiError;
   friend class Array;
+  friend class Bigint;
   friend class BoundedType;
-  friend class MixinAppType;
   friend class Class;
+  friend class ClosureData;
+  friend class Code;
   friend class Context;
   friend class ContextScope;
+  friend class ExceptionHandlers;
   friend class Field;
-  friend class ClosureData;
-  friend class RedirectionData;
   friend class Function;
   friend class GrowableObjectArray;
-  friend class LinkedHashMap;
+  friend class ICData;
   friend class ImmutableArray;
   friend class JSRegExp;
   friend class LanguageError;
   friend class Library;
   friend class LibraryPrefix;
-  friend class Namespace;
-  friend class Bigint;
+  friend class LinkedHashMap;
   friend class LiteralToken;
+  friend class LocalVarDescriptors;
+  friend class MegamorphicCache;
+  friend class MirrorReference;
+  friend class MixinAppType;
+  friend class Namespace;
+  friend class ObjectPool;
   friend class PatchClass;
+  friend class RedirectionData;
   friend class Script;
   friend class Stacktrace;
+  friend class SubtypeTestCache;
   friend class TokenStream;
   friend class Type;
   friend class TypeArguments;
   friend class TypeParameter;
   friend class TypeRef;
-  friend class UnresolvedClass;
   friend class UnhandledException;
+  friend class UnresolvedClass;
   friend class WeakProperty;
-  friend class MirrorReference;
-  friend class ExceptionHandlers;
-  friend class LocalVarDescriptors;
   DISALLOW_COPY_AND_ASSIGN(SnapshotReader);
 };
 
@@ -662,12 +740,12 @@ class SnapshotWriter : public BaseWriter {
                  ReAlloc alloc,
                  intptr_t initial_size,
                  ForwardList* forward_list,
-                 bool can_send_any_object);
+                 bool can_send_any_object,
+                 bool snapshot_code);
 
  public:
   // Snapshot kind.
   Snapshot::Kind kind() const { return kind_; }
-  bool allow_code() const { return false; }
 
   // Serialize an object into the buffer.
   void WriteObject(RawObject* raw);
@@ -685,12 +763,15 @@ class SnapshotWriter : public BaseWriter {
     exception_msg_ = msg;
   }
   bool can_send_any_object() const { return can_send_any_object_; }
+  bool snapshot_code() const { return snapshot_code_; }
   void ThrowException(Exceptions::ExceptionType type, const char* msg);
 
   // Write a version string for the snapshot.
   void WriteVersion();
 
   static intptr_t FirstObjectId();
+
+  int32_t GetInstructionsId(RawInstructions* instructions) { return 0; }
 
  protected:
   void UnmarkAll() {
@@ -703,12 +784,12 @@ class SnapshotWriter : public BaseWriter {
   bool CheckAndWritePredefinedObject(RawObject* raw);
   void HandleVMIsolateObject(RawObject* raw);
 
-  void WriteObjectRef(RawObject* raw);
   void WriteClassId(RawClass* cls);
   void WriteStaticImplicitClosure(intptr_t object_id,
                                   RawFunction* func,
                                   intptr_t tags);
-  void WriteObjectImpl(RawObject* raw);
+  void WriteObjectImpl(RawObject* raw, bool as_reference);
+  void WriteObjectRef(RawObject* raw);
   void WriteInlinedObject(RawObject* raw);
   void WriteForwardedObjects();
   void ArrayWriteTo(intptr_t object_id,
@@ -751,26 +832,30 @@ class SnapshotWriter : public BaseWriter {
   const char* exception_msg_;  // Message associated with exception.
   bool unmarked_objects_;  // True if marked objects have been unmarked.
   bool can_send_any_object_;  // True if any Dart instance can be sent.
+  bool snapshot_code_;
 
   friend class FullSnapshotWriter;
   friend class RawArray;
   friend class RawClass;
   friend class RawClosureData;
+  friend class RawExceptionHandlers;
   friend class RawGrowableObjectArray;
-  friend class RawLinkedHashMap;
   friend class RawImmutableArray;
+  friend class RawInstructions;
   friend class RawJSRegExp;
   friend class RawLibrary;
+  friend class RawLinkedHashMap;
   friend class RawLiteralToken;
+  friend class RawLocalVarDescriptors;
   friend class RawMirrorReference;
+  friend class RawObjectPool;
   friend class RawReceivePort;
   friend class RawScript;
   friend class RawStacktrace;
+  friend class RawSubtypeTestCache;
   friend class RawTokenStream;
   friend class RawTypeArguments;
   friend class RawUserTag;
-  friend class RawExceptionHandlers;
-  friend class RawLocalVarDescriptors;
   friend class SnapshotWriterVisitor;
   friend class WriteInlinedObjectVisitor;
   DISALLOW_COPY_AND_ASSIGN(SnapshotWriter);
@@ -782,7 +867,8 @@ class FullSnapshotWriter {
   static const intptr_t kInitialSize = 64 * KB;
   FullSnapshotWriter(uint8_t** vm_isolate_snapshot_buffer,
                      uint8_t** isolate_snapshot_buffer,
-                     ReAlloc alloc);
+                     ReAlloc alloc,
+                     bool snapshot_code);
   ~FullSnapshotWriter();
 
   uint8_t** vm_isolate_snapshot_buffer() {
@@ -819,8 +905,18 @@ class FullSnapshotWriter {
   ForwardList* forward_list_;
   Array& scripts_;
   Array& symbol_table_;
+  bool snapshot_code_;
 
   DISALLOW_COPY_AND_ASSIGN(FullSnapshotWriter);
+};
+
+
+class PrecompiledSnapshotWriter : public FullSnapshotWriter {
+ public:
+  PrecompiledSnapshotWriter(uint8_t** vm_isolate_snapshot_buffer,
+                            uint8_t** isolate_snapshot_buffer,
+                            ReAlloc alloc);
+  ~PrecompiledSnapshotWriter();
 };
 
 

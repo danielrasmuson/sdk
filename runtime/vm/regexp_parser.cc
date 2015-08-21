@@ -217,6 +217,8 @@ RegExpParser::RegExpParser(const String& in,
 
 
 bool RegExpParser::ParseFunction(ParsedFunction *parsed_function) {
+  VMTagScope tagScope(parsed_function->thread(),
+                      VMTag::kCompileParseRegExpTagId);
   Zone* zone = parsed_function->zone();
   JSRegExp& regexp = JSRegExp::Handle(parsed_function->function().regexp());
 

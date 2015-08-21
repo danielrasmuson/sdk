@@ -6,7 +6,7 @@
 // Files when using deferred loading.
 
 import 'package:async_helper/async_helper.dart';
-import 'package:compiler/src/dart2jslib.dart';
+import 'package:compiler/src/compiler.dart';
 import 'package:compiler/src/js_backend/js_backend.dart'
        show JavaScriptBackend;
 import 'package:expect/expect.dart';
@@ -14,11 +14,12 @@ import 'memory_compiler.dart';
 import 'output_collector.dart';
 
 void main() {
-  OutputCollector collector = new OutputCollector();
-  Compiler compiler = compilerFor(
-      MEMORY_SOURCE_FILES,
-      outputProvider: collector);
-  asyncTest(() => compiler.run(Uri.parse('memory:main.dart')).then((_) {
+  asyncTest(() async {
+    OutputCollector collector = new OutputCollector();
+    CompilationResult result = await runCompiler(
+        memorySourceFiles: MEMORY_SOURCE_FILES,
+        outputProvider: collector);
+    Compiler compiler = result.compiler;
     String mainOutput = collector.getOutput('', 'js');
     String deferredOutput =  collector.getOutput('out_1', 'part.js');
     JavaScriptBackend backend = compiler.backend;
@@ -27,7 +28,7 @@ void main() {
         "Deferred output doesn't contain '${isPrefix}A: 1':\n"
         "$deferredOutput");
     Expect.isFalse(mainOutput.contains('${isPrefix}A: 1'));
-  }));
+  });
 }
 
 // We force additional runtime type support to be output for A by instantiating

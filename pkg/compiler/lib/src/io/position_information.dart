@@ -7,18 +7,21 @@
 
 library dart2js.source_information.position;
 
-import '../dart2jslib.dart' show
-    invariant,
-    MessageKind,
+import '../diagnostics/invariant.dart' show
+    invariant;
+import '../diagnostics/source_span.dart' show
     SourceSpan;
+import '../diagnostics/spannable.dart' show
+    NO_LOCATION_SPANNABLE;
 import '../elements/elements.dart' show
     AstElement,
     LocalElement;
 import '../js/js.dart' as js;
 import '../js/js_source_mapping.dart';
 import '../js/js_debug.dart';
-import '../tree/tree.dart' show Node, Send;
-import '../util/util.dart' show NO_LOCATION_SPANNABLE;
+import '../tree/tree.dart' show
+    Node,
+    Send;
 
 import 'source_file.dart';
 import 'source_information.dart';
@@ -172,7 +175,24 @@ class PositionSourceInformationBuilder implements SourceInformationBuilder {
   SourceInformation buildLoop(Node node) => buildBegin(node);
 
   @override
-  SourceInformation buildGet(Node node) => buildBegin(node);
+  SourceInformation buildGet(Node node) {
+    Node left = node;
+    Node right = node;
+    Send send = node.asSend();
+    if (send != null) {
+      right = send.selector;
+    }
+    // For a read access like `a.b` the first source locations points to the
+    // left-most part of the access, `a` in the example, and the second source
+    // location points to the 'name' of accessed property, `b` in the
+    // example. The latter is needed when both `a` and `b` are compiled into
+    // JavaScript invocations.
+    return new PositionSourceInformation(
+        new OffsetSourceLocation(
+            sourceFile, left.getBeginToken().charOffset, name),
+        new OffsetSourceLocation(
+            sourceFile, right.getBeginToken().charOffset, name));
+  }
 
   @override
   SourceInformation buildCall(Node receiver, Node call) {
@@ -214,7 +234,8 @@ class CodePosition {
 
 /// Registry for mapping [js.Node]s to their [CodePosition].
 class CodePositionRecorder {
-  Map<js.Node, CodePosition> _codePositionMap = <js.Node, CodePosition>{};
+  Map<js.Node, CodePosition> _codePositionMap =
+      new Map<js.Node, CodePosition>.identity();
 
   void registerPositions(js.Node node,
                          int startPosition,

@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:analysis_server/src/analysis_server.dart';
 import 'package:analysis_server/src/constants.dart';
+import 'package:analysis_server/src/context_manager.dart';
 import 'package:analysis_server/src/domain_execution.dart';
 import 'package:analysis_server/src/plugin/server_plugin.dart';
 import 'package:analysis_server/src/protocol.dart';
@@ -24,8 +25,10 @@ import 'package:unittest/unittest.dart';
 import 'mock_sdk.dart';
 import 'mocks.dart';
 import 'operation/operation_queue_test.dart';
+import 'utils.dart';
 
 main() {
+  initializeTestEnvironment();
   group('ExecutionDomainHandler', () {
     MemoryResourceProvider provider = new MemoryResourceProvider();
     AnalysisServer server;
@@ -35,9 +38,14 @@ main() {
       ExtensionManager manager = new ExtensionManager();
       ServerPlugin serverPlugin = new ServerPlugin();
       manager.processPlugins([serverPlugin]);
-      server = new AnalysisServer(new MockServerChannel(), provider,
-          new MockPackageMapProvider(), null, serverPlugin,
-          new AnalysisServerOptions(), new MockSdk(),
+      server = new AnalysisServer(
+          new MockServerChannel(),
+          provider,
+          new MockPackageMapProvider(),
+          null,
+          serverPlugin,
+          new AnalysisServerOptions(),
+          new MockSdk(),
           InstrumentationService.NULL_SERVICE);
       handler = new ExecutionDomainHandler(server);
     });
@@ -225,7 +233,7 @@ main() {
       when(context.getLibrariesReferencedFromHtml(anyObject))
           .thenReturn([source6, source7]);
 
-      ServerContextManager manager = new ServerContextManagerMock();
+      ContextManager manager = new ServerContextManagerMock();
       when(manager.isInAnalysisRoot(anyString)).thenReturn(true);
 
       AnalysisServer server = new AnalysisServerMock();

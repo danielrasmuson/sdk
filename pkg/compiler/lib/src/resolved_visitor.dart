@@ -2,7 +2,39 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-part of dart2js;
+library dart2js.resolved_visitor;
+
+import 'constants/expressions.dart';
+import 'dart_types.dart' show
+    DartType;
+import 'diagnostics/invariant.dart' show
+    invariant;
+import 'diagnostics/spannable.dart' show
+    Spannable;
+import 'elements/elements.dart' show
+    Element,
+    Elements,
+    ErroneousElement,
+    FunctionElement,
+    LocalFunctionElement,
+    LocalVariableElement,
+    ParameterElement,
+    PrefixElement,
+    TypeVariableElement;
+import 'resolution/operators.dart' as op;
+import 'resolution/semantic_visitor.dart';
+import 'resolution/send_resolver.dart' show
+    SendResolverMixin;
+import 'resolution/send_structure.dart' show
+    NewStructure,
+    SemanticSendStructure,
+    SendStructure;
+import 'resolution/tree_elements.dart' show
+    TreeElements;
+import 'tree/tree.dart';
+import 'universe/universe.dart' show
+    CallStructure,
+    Selector;
 
 /// Enum for the visit methods added in [ResolvedVisitor].
 // TODO(johnniwinther): Remove this.
@@ -117,6 +149,13 @@ abstract class BaseResolvedVisitor<R> extends Visitor<R>
       return visitor.visitClosureSend(node);
     } else {
       if (node.isConditional) {
+        if (node.receiver != null) {
+          Element receiverElement = elements[node.receiver];
+          if (receiverElement != null && receiverElement.isClass) {
+            // Handle C?.b as C.b
+            return visitor.visitStaticSend(node);
+          }
+        }
         return visitor.visitDynamicSend(node);
       } else if (Elements.isUnresolved(element)) {
         if (element == null) {
@@ -327,10 +366,13 @@ class ResolvedSemanticDispatcher<R> extends Object
       Node node,
       String message,
       ResolvedKindVisitor<R> visitor) {
-    return bulkHandleError(node, visitor);
+    return bulkHandleError(node, null, visitor);
   }
 
-  R bulkHandleError(Node node, ResolvedKindVisitor<R> visitor) {
+  R bulkHandleError(
+      Node node,
+      ErroneousElement error,
+      ResolvedKindVisitor<R> visitor) {
     if (node.asSendSet() != null) {
       return visitor.handleSendSet(node);
     } else if (node.asNewExpression() != null) {
@@ -386,6 +428,13 @@ class ResolvedSemanticDispatcher<R> extends Object
   @override
   R bulkHandleNew(NewExpression node, ResolvedKindVisitor<R> visitor) {
     return visitor.handleNewExpression(node);
+  }
+
+  @override
+  void previsitDeferredAccess(
+      Send node,
+      PrefixElement prefix,
+      ResolvedKindVisitor<R> visitor) {
   }
 
   @override

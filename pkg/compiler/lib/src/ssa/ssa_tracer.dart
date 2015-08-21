@@ -7,8 +7,9 @@ library ssa.tracer;
 import 'dart:async' show EventSink;
 
 import 'ssa.dart';
+import '../compiler.dart' show Compiler;
+import '../diagnostics/invariant.dart' show DEBUG_MODE;
 import '../js_backend/js_backend.dart';
-import '../dart2jslib.dart';
 import '../tracer.dart';
 
 /**
@@ -387,6 +388,10 @@ class HInstructionStringifier implements HVisitor<String> {
     }
     buffer.write(")");
     return buffer.toString();
+  }
+
+  String visitRef(HRef node) {
+    return 'Ref ${temporaryId(node.value)}';
   }
 
   String visitReturn(HReturn node) => "Return ${temporaryId(node.inputs[0])}";

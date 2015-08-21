@@ -4,24 +4,38 @@
 
 library dart2js.ir_builder;
 
-import '../compile_time_constants.dart' show BackendConstantEnvironment;
+import '../common/names.dart' show
+    Names;
+import '../compile_time_constants.dart' show
+    BackendConstantEnvironment;
 import '../constants/constant_system.dart';
-import '../constants/values.dart' show ConstantValue, PrimitiveConstantValue;
+import '../constants/values.dart' show
+    ConstantValue,
+    PrimitiveConstantValue;
 import '../dart_types.dart';
-import '../dart2jslib.dart';
+import '../diagnostics/invariant.dart' show
+    invariant;
 import '../elements/elements.dart';
 import '../io/source_information.dart';
 import '../tree/tree.dart' as ast;
-import '../types/types.dart' show TypeMask;
+import '../types/types.dart' show
+    TypeMask;
 import '../closure.dart' hide ClosureScope;
-import '../universe/universe.dart' show SelectorKind;
+import '../universe/universe.dart' show
+    CallStructure,
+    Selector,
+    SelectorKind;
 import 'cps_ir_nodes.dart' as ir;
-import 'cps_ir_builder_task.dart' show DartCapturedVariables,
+import 'cps_ir_builder_task.dart' show
+    DartCapturedVariables,
     GlobalProgramInformation;
 
-import '../common.dart' as types show TypeMask;
-import '../js/js.dart' as js show Template;
-import '../native/native.dart' show NativeBehavior;
+import '../common.dart' as types show
+    TypeMask;
+import '../js/js.dart' as js show
+    Template;
+import '../native/native.dart' show
+    NativeBehavior;
 
 /// A mapping from variable elements to their compile-time values.
 ///
@@ -638,7 +652,7 @@ class IrBuilder {
                                    Selector selector,
                                    TypeMask mask,
                                    List<ir.Primitive> arguments,
-                                   {SourceInformation sourceInformation}) {
+                                   SourceInformation sourceInformation) {
     assert(isOpen);
     return _continueWithExpression(
         (k) => new ir.InvokeMethod(receiver, selector, mask, arguments, k,
@@ -651,8 +665,8 @@ class IrBuilder {
                                 List<ir.Definition> arguments,
                                 {SourceInformation sourceInformation}) {
     Selector selector = callStructure.callSelector;
-    return _buildInvokeDynamic(target, selector, mask, arguments,
-        sourceInformation: sourceInformation);
+    return _buildInvokeDynamic(
+        target, selector, mask, arguments, sourceInformation);
   }
 
 
@@ -817,7 +831,7 @@ class IrBuilder {
     // TODO(johnniwinther): This should have its own ir node.
     return _buildInvokeSuper(
         method,
-        new Selector.getter(method.name, method.library),
+        new Selector.getter(method.memberName),
         const <ir.Primitive>[],
         sourceInformation);
   }
@@ -828,7 +842,7 @@ class IrBuilder {
     // TODO(johnniwinther): This should have its own ir node.
     return _buildInvokeSuper(
         getter,
-        new Selector.getter(getter.name, getter.library),
+        new Selector.getter(getter.memberName),
         const <ir.Primitive>[],
         sourceInformation);
   }
@@ -841,7 +855,7 @@ class IrBuilder {
     // TODO(johnniwinther): This should have its own ir node.
     _buildInvokeSuper(
         setter,
-        new Selector.setter(setter.name, setter.library),
+        new Selector.setter(setter.memberName),
         <ir.Primitive>[value],
         sourceInformation);
     return value;
@@ -877,15 +891,15 @@ class IrBuilder {
                                       List<ir.Primitive> arguments,
                                       {SourceInformation sourceInformation}) {
     return _buildInvokeDynamic(
-        receiver, selector, mask, arguments,
-        sourceInformation: sourceInformation);
+        receiver, selector, mask, arguments, sourceInformation);
   }
 
   /// Create a dynamic getter invocation on [receiver] where the getter name is
   /// defined by [selector].
   ir.Primitive buildDynamicGet(ir.Primitive receiver,
                                Selector selector,
-                               TypeMask mask) {
+                               TypeMask mask,
+                               SourceInformation sourceInformation) {
     assert(selector.isGetter);
     FieldElement field = program.locateSingleField(selector, mask);
     if (field != null) {
@@ -894,7 +908,7 @@ class IrBuilder {
       return buildFieldGet(receiver, field);
     } else {
       return _buildInvokeDynamic(
-          receiver, selector, mask, const <ir.Primitive>[]);
+          receiver, selector, mask, const <ir.Primitive>[], sourceInformation);
     }
   }
 
@@ -903,7 +917,8 @@ class IrBuilder {
   ir.Primitive buildDynamicSet(ir.Primitive receiver,
                                Selector selector,
                                TypeMask mask,
-                               ir.Primitive value) {
+                               ir.Primitive value,
+                               {SourceInformation sourceInformation}) {
     assert(selector.isSetter);
     FieldElement field = program.locateSingleField(selector, mask);
     if (field != null) {
@@ -911,19 +926,22 @@ class IrBuilder {
       // treated as a field access, since the setter might not be emitted.
       buildFieldSet(receiver, field, value);
     } else {
-      _buildInvokeDynamic(receiver, selector, mask, <ir.Primitive>[value]);
+      _buildInvokeDynamic(receiver, selector, mask, <ir.Primitive>[value],
+                          sourceInformation);
     }
     return value;
   }
 
   /// Create a dynamic index set invocation on [receiver] with the provided
   /// [index] and [value].
-  ir.Primitive  buildDynamicIndexSet(ir.Primitive receiver,
-                                     TypeMask mask,
-                                     ir.Primitive index,
-                                     ir.Primitive value) {
+  ir.Primitive buildDynamicIndexSet(ir.Primitive receiver,
+                                    TypeMask mask,
+                                    ir.Primitive index,
+                                    ir.Primitive value,
+                                    {SourceInformation sourceInformation}) {
     _buildInvokeDynamic(
-        receiver, new Selector.indexSet(), mask, <ir.Primitive>[index, value]);
+        receiver, new Selector.indexSet(), mask, <ir.Primitive>[index, value],
+        sourceInformation);
     return value;
   }
 
@@ -998,7 +1016,7 @@ class IrBuilder {
   /// Create a getter invocation of the static [getter].
   ir.Primitive buildStaticGetterGet(MethodElement getter,
                                     SourceInformation sourceInformation) {
-    Selector selector = new Selector.getter(getter.name, getter.library);
+    Selector selector = new Selector.getter(getter.memberName);
     return _buildInvokeStatic(
         getter, selector, const <ir.Primitive>[], sourceInformation);
   }
@@ -1014,7 +1032,7 @@ class IrBuilder {
   ir.Primitive buildStaticFieldSet(FieldElement field,
                                    ir.Primitive value,
                                    [SourceInformation sourceInformation]) {
-    add(new ir.SetStatic(field, value, sourceInformation));
+    addPrimitive(new ir.SetStatic(field, value, sourceInformation));
     return value;
   }
 
@@ -1022,7 +1040,7 @@ class IrBuilder {
   ir.Primitive buildStaticSetterSet(MethodElement setter,
                                     ir.Primitive value,
                                     {SourceInformation sourceInformation}) {
-    Selector selector = new Selector.setter(setter.name, setter.library);
+    Selector selector = new Selector.setter(setter.memberName);
     _buildInvokeStatic(
         setter, selector, <ir.Primitive>[value], sourceInformation);
     return value;
@@ -1043,11 +1061,13 @@ class IrBuilder {
   ///
   /// The arguments must be strings; usually a call to [buildStringify] is
   /// needed to ensure the proper conversion takes places.
-  ir.Primitive buildStringConcatenation(List<ir.Primitive> arguments) {
+  ir.Primitive buildStringConcatenation(List<ir.Primitive> arguments,
+                                        {SourceInformation sourceInformation}) {
     assert(isOpen);
     return addPrimitive(new ir.ApplyBuiltinOperator(
         ir.BuiltinOperator.StringConcatenate,
-        arguments));
+        arguments,
+        sourceInformation));
   }
 
   /// Create an invocation of the `call` method of [functionExpression], where
@@ -1338,7 +1358,7 @@ class IrBuilder {
     ir.Continuation iteratorInvoked = new ir.Continuation([iterator]);
     add(new ir.LetCont(iteratorInvoked,
         new ir.InvokeMethod(expressionReceiver,
-            new Selector.getter("iterator", null),
+            new Selector.getter(const PublicName("iterator")),
             iteratorMask,
             emptyArguments,
             iteratorInvoked)));
@@ -1355,7 +1375,7 @@ class IrBuilder {
     ir.Continuation moveNextInvoked = new ir.Continuation([condition]);
     add(new ir.LetCont(moveNextInvoked,
         new ir.InvokeMethod(iterator,
-            new Selector.call("moveNext", null, 0),
+            new Selector.call(Names.moveNext, 0),
             moveNextMask,
             emptyArguments,
             moveNextInvoked)));
@@ -1378,7 +1398,7 @@ class IrBuilder {
     bodyBuilder.add(new ir.LetCont(currentInvoked,
         new ir.InvokeMethod(
             iterator,
-            new Selector.getter("current", null),
+            new Selector.getter(Names.current),
             currentMask,
             emptyArguments, currentInvoked)));
     // TODO(sra): Does this cover all cases? The general setter case include
@@ -1388,7 +1408,8 @@ class IrBuilder {
       bodyBuilder.buildLocalVariableSet(variableElement, currentValue);
     } else if (Elements.isErroneous(variableElement)) {
       bodyBuilder.buildErroneousInvocation(variableElement,
-          new Selector.setter(variableElement.name, variableElement.library),
+          new Selector.setter(
+              new Name(variableElement.name, variableElement.library)),
           <ir.Primitive>[currentValue]);
     } else if (Elements.isStaticOrTopLevel(variableElement)) {
       if (variableElement.isField) {
@@ -1829,8 +1850,10 @@ class IrBuilder {
 
       ir.Expression buildCatchClause(CatchClauseInfo clause) {
         IrBuilder clauseBuilder = builder.makeDelimitedBuilder();
-        clauseBuilder.declareLocalVariable(clause.exceptionVariable,
-            initialValue: exceptionParameter);
+        if (clause.exceptionVariable != null) {
+          clauseBuilder.declareLocalVariable(clause.exceptionVariable,
+              initialValue: exceptionParameter);
+        }
         if (clause.stackTraceVariable != null) {
           clauseBuilder.declareLocalVariable(clause.stackTraceVariable,
               initialValue: traceParameter);
@@ -2098,7 +2121,10 @@ class IrBuilder {
 
   ir.Primitive buildNonTailThrow(ir.Primitive value) {
     assert(isOpen);
-    return addPrimitive(new ir.NonTailThrow(value));
+    ir.Parameter param = new ir.Parameter(null);
+    ir.Continuation cont = new ir.Continuation(<ir.Parameter>[param]);
+    add(new ir.LetCont(cont, new ir.Throw(value)));
+    return param;
   }
 
   void buildRethrow() {
@@ -2215,9 +2241,11 @@ class IrBuilder {
     return environment.discard(1);
   }
 
-  ir.Primitive buildIdentical(ir.Primitive x, ir.Primitive y) {
+  ir.Primitive buildIdentical(ir.Primitive x, ir.Primitive y,
+                              {SourceInformation sourceInformation}) {
     return addPrimitive(new ir.ApplyBuiltinOperator(
-        ir.BuiltinOperator.Identical, <ir.Primitive>[x, y]));
+        ir.BuiltinOperator.Identical, <ir.Primitive>[x, y],
+        sourceInformation));
   }
 
   /// Called when entering a nested function with free variables.
@@ -2291,9 +2319,10 @@ class IrBuilder {
     state.functionParameters.add(parameter);
     ClosureLocation location = state.boxedVariables[parameterElement];
     if (location != null) {
-      add(new ir.SetField(environment.lookup(location.box),
-                          location.field,
-                          parameter));
+      addPrimitive(new ir.SetField(
+          environment.lookup(location.box),
+          location.field,
+          parameter));
     } else {
       environment.extend(parameterElement, parameter);
     }
@@ -2315,12 +2344,14 @@ class IrBuilder {
     }
     ClosureLocation location = state.boxedVariables[variableElement];
     if (location != null) {
-      add(new ir.SetField(environment.lookup(location.box),
-                          location.field,
-                          initialValue));
+      addPrimitive(new ir.SetField(
+          environment.lookup(location.box),
+          location.field,
+          initialValue));
     } else if (isInMutableVariable(variableElement)) {
-      add(new ir.LetMutable(getMutableVariable(variableElement),
-                            initialValue));
+      add(new ir.LetMutable(
+          getMutableVariable(variableElement),
+          initialValue));
     } else {
       initialValue.useElementAsHint(variableElement);
       environment.extend(variableElement, initialValue);
@@ -2340,11 +2371,17 @@ class IrBuilder {
                                        SourceInformation sourceInformation) {
     List<ir.Primitive> arguments = <ir.Primitive>[];
     for (ClosureFieldElement field in classElement.closureFields) {
-      // Captured 'this' is not available as a local in the current environment,
-      // so treat that specially.
-      ir.Primitive value = field.local is ThisLocal
-          ? buildThis()
-          : environment.lookup(field.local);
+      // Captured 'this' and type variables are not always available as locals
+      // in the environment, so treat those specially.
+      ir.Primitive value;
+      if (field.local is ThisLocal) {
+        value = buildThis();
+      } else if (field.local is TypeVariableLocal) {
+        TypeVariableLocal variable = field.local;
+        value = buildTypeVariableAccess(variable.typeVariable);
+      } else {
+        value = environment.lookup(field.local);
+      }
       arguments.add(value);
     }
     return addPrimitive(new ir.CreateInstance(
@@ -2361,7 +2398,7 @@ class IrBuilder {
       result.useElementAsHint(local);
       return addPrimitive(result);
     } else if (isInMutableVariable(local)) {
-      return addPrimitive(new ir.GetMutableVariable(getMutableVariable(local)));
+      return addPrimitive(new ir.GetMutable(getMutableVariable(local)));
     } else {
       return environment.lookup(local);
     }
@@ -2373,11 +2410,13 @@ class IrBuilder {
     assert(isOpen);
     ClosureLocation location = state.boxedVariables[local];
     if (location != null) {
-      add(new ir.SetField(environment.lookup(location.box),
-                          location.field,
-                          value));
+      addPrimitive(new ir.SetField(
+          environment.lookup(location.box),
+          location.field,
+          value));
     } else if (isInMutableVariable(local)) {
-      add(new ir.SetMutableVariable(getMutableVariable(local), value));
+      addPrimitive(new ir.SetMutable(
+          getMutableVariable(local), value));
     } else {
       value.useElementAsHint(local);
       environment.update(local, value);
@@ -2421,7 +2460,7 @@ class IrBuilder {
     for (VariableElement loopVar in scope.boxedLoopVariables) {
       ClosureLocation location = scope.capturedVariables[loopVar];
       ir.Primitive value = addPrimitive(new ir.GetField(box, location.field));
-      add(new ir.SetField(newBox, location.field, value));
+      addPrimitive(new ir.SetField(newBox, location.field, value));
     }
     environment.update(scope.box, newBox);
   }
@@ -2443,7 +2482,7 @@ class IrBuilder {
   void buildFieldSet(ir.Primitive receiver,
                      FieldElement target,
                      ir.Primitive value) {
-    add(new ir.SetField(receiver, target, value));
+    addPrimitive(new ir.SetField(receiver, target, value));
   }
 
   ir.Primitive buildSuperFieldGet(FieldElement target) {
@@ -2451,17 +2490,17 @@ class IrBuilder {
   }
 
   ir.Primitive buildSuperFieldSet(FieldElement target, ir.Primitive value) {
-    add(new ir.SetField(buildThis(), target, value));
+    addPrimitive(new ir.SetField(buildThis(), target, value));
     return value;
   }
 
-  ir.Primitive buildInvokeDirectly(FunctionElement target,
+  ir.Primitive buildInvokeDirectly(MethodElement target,
                                    ir.Primitive receiver,
                                    List<ir.Primitive> arguments,
                                    {SourceInformation sourceInformation}) {
     assert(isOpen);
     Selector selector =
-        new Selector.call(target.name, target.library, arguments.length);
+        new Selector.call(target.memberName, arguments.length);
     return _continueWithExpression(
         (k) => new ir.InvokeMethodDirectly(
             receiver, target, selector, arguments, k, sourceInformation));
@@ -2654,8 +2693,10 @@ class IrBuilder {
   /// `right` if [value] is null. Only when [value] is null, [buildRight] is
   /// evaluated to produce the `right` value.
   ir.Primitive buildIfNull(ir.Primitive value,
-                           ir.Primitive buildRight(IrBuilder builder)) {
-    ir.Primitive condition = _buildCheckNull(value);
+                           ir.Primitive buildRight(IrBuilder builder),
+                           {SourceInformation sourceInformation}) {
+    ir.Primitive condition =
+        _buildCheckNull(value, sourceInformation: sourceInformation);
     return buildConditional(condition, buildRight, (_) => value);
   }
 
@@ -2663,15 +2704,19 @@ class IrBuilder {
   /// that checks if [receiver] is null, if so, it returns null, otherwise it
   /// evaluates the [buildSend] expression.
   ir.Primitive buildIfNotNullSend(ir.Primitive receiver,
-                                  ir.Primitive buildSend(IrBuilder builder)) {
-    ir.Primitive condition = _buildCheckNull(receiver);
+                                  ir.Primitive buildSend(IrBuilder builder),
+                                  {SourceInformation sourceInformation}) {
+    ir.Primitive condition =
+        _buildCheckNull(receiver, sourceInformation: sourceInformation);
     return buildConditional(condition, (_) => receiver, buildSend);
   }
 
   /// Creates a type test checking whether [value] is null.
-  ir.Primitive _buildCheckNull(ir.Primitive value) {
+  ir.Primitive _buildCheckNull(ir.Primitive value,
+                               {SourceInformation sourceInformation}) {
     assert(isOpen);
-    return buildIdentical(value, buildNullConstant());
+    return buildIdentical(value, buildNullConstant(),
+        sourceInformation: sourceInformation);
   }
 
   /// Convert the given value to a string.
@@ -2680,6 +2725,10 @@ class IrBuilder {
         program.stringifyFunction,
         new CallStructure.unnamed(1),
         <ir.Primitive>[value]);
+  }
+
+  ir.Node buildAwait(ir.Primitive value) {
+    return _continueWithExpression((k) => new ir.Await(value, k));
   }
 }
 

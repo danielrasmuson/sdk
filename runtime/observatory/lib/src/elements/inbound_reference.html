@@ -8,10 +8,16 @@
   <template>
     <link rel="stylesheet" href="css/shared.css">
     <div>
-      from <any-service-ref ref="{{ source }}"></any-service-ref>
-      <template if="{{ slotIsArrayIndex }}">via [{{ slot }}]</template>
-      <template if="{{ slotIsField }}">via <field-ref ref="{{ slot }}"></field-ref></template>
-
+      <template if="{{ ref['parentField'] != null }}">
+        from <any-service-ref ref="{{ element['parentField'] }}"></any-service-ref>
+      </template>
+      <template if="{{ ref['parentListIndex'] != null }}">
+        from [{{ ref['parentListIndex'] }}] of
+      </template>
+      <template if="{{ ref['_parentWordOffset'] != null }}">
+        from word[{{ ref['_parentWordOffset'] }}] of
+      </template>
+      <any-service-ref ref="{{ source }}"></any-service-ref>
       <curly-block callback="{{ expander() }}">
         <div class="memberList">
           <div class="memberItem">

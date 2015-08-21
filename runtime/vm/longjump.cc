@@ -17,7 +17,7 @@ namespace dart {
 
 jmp_buf* LongJumpScope::Set() {
   ASSERT(top_ == NULL);
-  top_ = Isolate::Current()->top_resource();
+  top_ = Thread::Current()->top_resource();
   return &environment_;
 }
 
@@ -25,13 +25,19 @@ jmp_buf* LongJumpScope::Set() {
 bool LongJumpScope::IsSafeToJump() {
   // We do not want to jump past Dart frames.  Note that this code
   // assumes the stack grows from high to low.
-  Isolate* isolate = Isolate::Current();
+  Thread* thread = Thread::Current();
+  Isolate* isolate = thread->isolate();
   uword jumpbuf_addr = Isolate::GetCurrentStackPointer();
 #if defined(USING_SIMULATOR)
   uword top_exit_frame_info = isolate->simulator()->top_exit_frame_info();
 #else
-  uword top_exit_frame_info = isolate->top_exit_frame_info();
+  uword top_exit_frame_info = thread->top_exit_frame_info();
 #endif
+  if (!isolate->MutatorThreadIsCurrentThread()) {
+    // A helper thread does not execute Dart code, so it's safe to jump.
+    ASSERT(top_exit_frame_info == 0);
+    return true;
+  }
   return ((top_exit_frame_info == 0) || (jumpbuf_addr < top_exit_frame_info));
 }
 
@@ -42,7 +48,8 @@ void LongJumpScope::Jump(int value, const Error& error) {
   ASSERT(value != 0);
   ASSERT(IsSafeToJump());
 
-  Isolate* isolate = Isolate::Current();
+  Thread* thread = Thread::Current();
+  Isolate* isolate = thread->isolate();
 
 #if defined(DEBUG)
 #define CHECK_REUSABLE_HANDLE(name)                                            \
@@ -55,7 +62,7 @@ REUSABLE_HANDLE_LIST(CHECK_REUSABLE_HANDLE)
   isolate->object_store()->set_sticky_error(error);
 
   // Destruct all the active StackResource objects.
-  StackResource::UnwindAbove(isolate, top_);
+  StackResource::UnwindAbove(thread, top_);
   longjmp(environment_, value);
   UNREACHABLE();
 }

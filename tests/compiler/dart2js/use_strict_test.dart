@@ -2,8 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'dart:async';
-
 import 'package:async_helper/async_helper.dart';
 import 'package:expect/expect.dart';
 import 'memory_compiler.dart';
@@ -48,8 +46,9 @@ const MEMORY_SOURCE_FILES = const {
 
 main() {
   OutputCollector collector = new OutputCollector();
-  var compiler = compilerFor(MEMORY_SOURCE_FILES, outputProvider: collector);
-  asyncTest(() => compiler.run(Uri.parse('memory:main.dart')).then((_) {
+  asyncTest(() async {
+    await runCompiler(
+        memorySourceFiles: MEMORY_SOURCE_FILES, outputProvider: collector);
     String jsOutput = collector.getOutput('', 'js');
 
     // Skip comments.
@@ -64,5 +63,5 @@ main() {
     // 'arguments'.
     RegExp re = new RegExp(r'[^\w$](arguments|eval)[^\w$]');
     Expect.isFalse(re.hasMatch(filtered));
-  }));
+  });
 }

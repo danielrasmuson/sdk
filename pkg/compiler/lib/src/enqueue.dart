@@ -2,7 +2,61 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-part of dart2js;
+library dart2js.enqueue;
+
+import 'dart:collection' show
+    Queue;
+
+import 'common/names.dart' show
+    Identifiers;
+import 'common/work.dart' show
+    ItemCompilationContext,
+    WorkItem;
+import 'common/tasks.dart' show
+    CompilerTask,
+    DeferredAction,
+    DeferredTask;
+import 'common/registry.dart' show
+    Registry;
+import 'common/codegen.dart' show
+    CodegenWorkItem;
+import 'common/resolution.dart' show
+    ResolutionWorkItem;
+import 'compiler.dart' show
+    Compiler;
+import 'dart_types.dart' show
+    DartType,
+    InterfaceType;
+import 'diagnostics/invariant.dart' show
+    invariant;
+import 'diagnostics/spannable.dart' show
+    SpannableAssertionFailure;
+import 'elements/elements.dart' show
+    AnalyzableElement,
+    AstElement,
+    ClassElement,
+    ConstructorElement,
+    Element,
+    Elements,
+    FunctionElement,
+    LibraryElement,
+    LocalFunctionElement,
+    Member,
+    MemberElement,
+    MethodElement,
+    Name,
+    TypedElement,
+    TypedefElement;
+import 'js/js.dart' as js;
+import 'native/native.dart' as native;
+import 'resolution/members.dart' show
+    ResolverVisitor;
+import 'tree/tree.dart' show
+    Send;
+import 'universe/universe.dart';
+import 'util/util.dart' show
+    Link,
+    Setlet;
 
 typedef ItemCompilationContext ItemCompilationContextCreator();
 
@@ -96,7 +150,12 @@ abstract class Enqueuer {
    */
   void addToWorkList(Element element) {
     assert(invariant(element, element.isDeclaration));
-    internalAddToWorkList(element);
+    if (internalAddToWorkList(element) && compiler.dumpInfo) {
+      // TODO(sigmund): add other missing dependencies (internals, selectors
+      // enqueued after allocations), also enable only for the codegen enqueuer.
+      compiler.dumpInfoTask.registerDependency(
+          compiler.currentElement, element);
+    }
   }
 
   /**
@@ -146,7 +205,7 @@ abstract class Enqueuer {
     if (!member.isInstanceMember) return;
     String memberName = member.name;
 
-    if (member.kind == ElementKind.FIELD) {
+    if (member.isField) {
       // The obvious thing to test here would be "member.isNative",
       // however, that only works after metadata has been parsed/analyzed,
       // and that may not have happened yet.
@@ -187,13 +246,13 @@ abstract class Enqueuer {
         addToWorkList(member);
         return;
       }
-    } else if (member.kind == ElementKind.FUNCTION) {
+    } else if (member.isFunction) {
       FunctionElement function = member;
       function.computeType(compiler);
-      if (function.name == Compiler.NO_SUCH_METHOD) {
+      if (function.name == Identifiers.noSuchMethod_) {
         registerNoSuchMethod(function);
       }
-      if (function.name == Compiler.CALL_OPERATOR_NAME &&
+      if (function.name == Identifiers.call &&
           !cls.typeVariables.isEmpty) {
         registerCallMethodWithFreeTypeVariables(
             function, compiler.globalDependencies);
@@ -213,7 +272,7 @@ abstract class Enqueuer {
         addToWorkList(function);
         return;
       }
-    } else if (member.kind == ElementKind.GETTER) {
+    } else if (member.isGetter) {
       FunctionElement getter = member;
       getter.computeType(compiler);
       if (universe.hasInvokedGetter(getter, compiler.world)) {
@@ -226,7 +285,7 @@ abstract class Enqueuer {
         addToWorkList(getter);
         return;
       }
-    } else if (member.kind == ElementKind.SETTER) {
+    } else if (member.isSetter) {
       FunctionElement setter = member;
       setter.computeType(compiler);
       if (universe.hasInvokedSetter(setter, compiler.world)) {
@@ -355,7 +414,8 @@ abstract class Enqueuer {
         registerSelectorUse(selector);
         if (element.isField) {
           UniverseSelector selector = new UniverseSelector(
-              new Selector.setter(element.name, element.library), null);
+              new Selector.setter(new Name(
+                  element.name, element.library, isSetter: true)), null);
           registerInvokedSetter(selector);
         }
       }
@@ -599,7 +659,7 @@ abstract class Enqueuer {
     // Even in checked mode, type annotations for return type and argument
     // types do not imply type checks, so there should never be a check
     // against the type variable of a typedef.
-    assert(type.kind != TypeKind.TYPE_VARIABLE ||
+    assert(!type.isTypeVariable ||
            !type.element.enclosingElement.isTypedef);
   }
 
@@ -764,7 +824,7 @@ class ResolutionEnqueuer extends Enqueuer {
       }
     }
 
-    if (element.isGetter && element.name == Compiler.RUNTIME_TYPE) {
+    if (element.isGetter && element.name == Identifiers.runtimeType_) {
       // Enable runtime type support if we discover a getter called runtimeType.
       // We have to enable runtime type before hitting the codegen, so
       // that constructors know whether they need to generate code for

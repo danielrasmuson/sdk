@@ -1,7 +1,7 @@
 // Copyright (c) 2015, the Dart project authors.  Please see the AUTHORS file
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
-// VMOptions=--compile_all --error_on_bad_type --error_on_bad_override --verbose-debug
+// VMOptions=--error_on_bad_type --error_on_bad_override --verbose-debug
 
 import 'dart:async';
 import 'dart:developer';
@@ -66,7 +66,7 @@ test(Isolate isolate) async {
       if (bp == bp1) {
         await stoppedAtLine(15)(isolate);
         print(event.asyncContinuation);
-        expect(event.asyncContinuation.isNull, isTrue);
+        expect(event.asyncContinuation, equals(null));
         isolate.resume();
         bp1_hit.complete(null);
       }

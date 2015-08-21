@@ -2,17 +2,19 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library dart2js.send_structure;
+library dart2js.resolution.send_structure;
 
-import 'access_semantics.dart';
-import 'operators.dart';
-import 'semantic_visitor.dart';
 import '../dart_types.dart';
+import '../diagnostics/spannable.dart' show
+    SpannableAssertionFailure;
 import '../constants/expressions.dart';
 import '../elements/elements.dart';
 import '../tree/tree.dart';
 import '../universe/universe.dart';
-import '../util/util.dart';
+
+import 'access_semantics.dart';
+import 'operators.dart';
+import 'semantic_visitor.dart';
 
 /// Interface for the structure of the semantics of a [Send] or [NewExpression]
 /// node.
@@ -373,6 +375,13 @@ class InvokeStructure<R, A> implements SendStructure<R, A> {
             node.argumentsNode,
             selector,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidInvoke(
+            node,
+            semantics.element,
+            node.argumentsNode,
+            selector,
+            arg);
       case AccessKind.COMPOUND:
         // This is not a valid case.
         break;
@@ -590,6 +599,11 @@ class GetStructure<R, A> implements SendStructure<R, A> {
             node,
             semantics.element,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidGet(
+            node,
+            semantics.element,
+            arg);
       case AccessKind.COMPOUND:
         // This is not a valid case.
         break;
@@ -793,6 +807,12 @@ class SetStructure<R, A> implements SendStructure<R, A> {
             semantics.element,
             node.arguments.single,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidSet(
+            node,
+            semantics.element,
+            node.arguments.single,
+            arg);
       case AccessKind.COMPOUND:
         // This is not a valid case.
         break;
@@ -817,7 +837,7 @@ class NotStructure<R, A> implements SendStructure<R, A> {
             node,
             node.receiver,
             arg);
-      default:
+     default:
         // This is not a valid case.
         break;
     }
@@ -854,6 +874,12 @@ class UnaryStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.UNRESOLVED_SUPER:
         return visitor.visitUnresolvedSuperUnary(
+            node,
+            operator,
+            semantics.element,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidUnary(
             node,
             operator,
             semantics.element,
@@ -913,6 +939,12 @@ class IndexStructure<R, A> implements SendStructure<R, A> {
             semantics.element,
             node.arguments.single,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidIndex(
+            node,
+            semantics.element,
+            node.arguments.single,
+            arg);
       default:
         // This is not a valid case.
         break;
@@ -939,6 +971,12 @@ class EqualsStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.SUPER_METHOD:
         return visitor.visitSuperEquals(
+            node,
+            semantics.element,
+            node.arguments.single,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidEquals(
             node,
             semantics.element,
             node.arguments.single,
@@ -971,6 +1009,12 @@ class NotEqualsStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.SUPER_METHOD:
         return visitor.visitSuperNotEquals(
+            node,
+            semantics.element,
+            node.arguments.single,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidNotEquals(
             node,
             semantics.element,
             node.arguments.single,
@@ -1015,6 +1059,13 @@ class BinaryStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.UNRESOLVED_SUPER:
         return visitor.visitUnresolvedSuperBinary(
+            node,
+            semantics.element,
+            operator,
+            node.arguments.single,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidBinary(
             node,
             semantics.element,
             operator,
@@ -1084,6 +1135,13 @@ class IndexSetStructure<R, A> implements SendStructure<R, A> {
             node.arguments.first,
             node.arguments.tail.head,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidIndexSet(
+            node,
+            semantics.element,
+            node.arguments.first,
+            node.arguments.tail.head,
+            arg);
       default:
         // This is not a valid case.
         break;
@@ -1128,6 +1186,13 @@ class IndexPrefixStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.UNRESOLVED_SUPER:
         return visitor.visitUnresolvedSuperIndexPrefix(
+            node,
+            semantics.element,
+            node.arguments.single,
+            operator,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidIndexPrefix(
             node,
             semantics.element,
             node.arguments.single,
@@ -1207,6 +1272,13 @@ class IndexPostfixStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.UNRESOLVED_SUPER:
         return visitor.visitUnresolvedSuperIndexPostfix(
+            node,
+            semantics.element,
+            node.arguments.single,
+            operator,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidIndexPostfix(
             node,
             semantics.element,
             node.arguments.single,
@@ -1468,6 +1540,13 @@ class CompoundStructure<R, A> implements SendStructure<R, A> {
             operator,
             node.arguments.single,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidCompound(
+            node,
+            semantics.element,
+            operator,
+            node.arguments.single,
+            arg);
       case AccessKind.COMPOUND:
         CompoundAccessSemantics compoundSemantics = semantics;
         switch (compoundSemantics.compoundAccessKind) {
@@ -1627,6 +1706,14 @@ class CompoundIndexSetStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.UNRESOLVED_SUPER:
         return visitor.visitUnresolvedSuperCompoundIndexSet(
+            node,
+            semantics.element,
+            node.arguments.first,
+            operator,
+            node.arguments.tail.head,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidCompoundIndexSet(
             node,
             semantics.element,
             node.arguments.first,
@@ -1867,6 +1954,12 @@ class PrefixStructure<R, A> implements SendStructure<R, A> {
             arg);
       case AccessKind.UNRESOLVED:
         return visitor.visitUnresolvedPrefix(
+            node,
+            semantics.element,
+            operator,
+            arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidPrefix(
             node,
             semantics.element,
             operator,
@@ -2187,6 +2280,12 @@ class PostfixStructure<R, A> implements SendStructure<R, A> {
             semantics.element,
             operator,
             arg);
+      case AccessKind.INVALID:
+        return visitor.errorInvalidPostfix(
+            node,
+            semantics.element,
+            operator,
+            arg);
       case AccessKind.COMPOUND:
         CompoundAccessSemantics compoundSemantics = semantics;
         switch (compoundSemantics.compoundAccessKind) {
@@ -2303,6 +2402,30 @@ class PostfixStructure<R, A> implements SendStructure<R, A> {
 
   String toString() => 'postfix($operator,$semantics)';
 }
+
+
+/// The structure for a [Send] whose prefix is a prefix for a deferred library.
+/// For instance `deferred.a` where `deferred` is a deferred prefix.
+class DeferredPrefixStructure<R, A> implements SendStructure<R, A> {
+  /// The deferred prefix element.
+  final PrefixElement prefix;
+
+  /// The send structure for the whole [Send] node. For instance a
+  /// [GetStructure] for `deferred.a` where `a` is a top level member of the
+  /// deferred library.
+  final SendStructure sendStructure;
+
+  DeferredPrefixStructure(this.prefix, this.sendStructure) {
+    assert(sendStructure != null);
+  }
+
+  @override
+  R dispatch(SemanticSendVisitor<R, A> visitor, Send send, A arg) {
+    visitor.previsitDeferredAccess(send, prefix, arg);
+    return sendStructure.dispatch(visitor, send, arg);
+  }
+}
+
 
 /// The structure for a [NewExpression] of a new invocation.
 abstract class NewStructure<R, A> implements SemanticSendStructure<R, A> {

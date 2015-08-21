@@ -3,28 +3,23 @@
 // BSD-style license that can be found in the LICENSE file.
 
 import 'package:expect/expect.dart';
-import "package:async_helper/async_helper.dart";
-import 'memory_source_file_helper.dart';
-import "memory_compiler.dart";
-import "dart:async";
+import 'package:async_helper/async_helper.dart';
+import 'memory_compiler.dart';
 
-import 'package:compiler/src/dart2jslib.dart'
+import 'package:compiler/src/compiler.dart'
        as dart2js;
 
-runTest(String mainScript, test) {
-  Compiler compiler = compilerFor(MEMORY_SOURCE_FILES,
-      outputProvider: new OutputCollector());
-  asyncTest(() => compiler.run(Uri.parse(mainScript))
-      .then((_) => test(compiler)));
-}
-
 void main() {
-  runTest('memory:main.dart', (compiler) {
+  asyncTest(() async {
+    CompilationResult  result =
+        await runCompiler(memorySourceFiles: MEMORY_SOURCE_FILES);
+    dart2js.Compiler compiler = result.compiler;
+
     lookupLibrary(name) {
       return compiler.libraryLoader.lookupLibrary(Uri.parse(name));
     }
 
-    var main = compiler.mainApp.find(dart2js.Compiler.MAIN);
+    var main = compiler.mainFunction;
     Expect.isNotNull(main, "Could not find 'main'");
     compiler.deferredLoadTask.onResolutionComplete(main);
 

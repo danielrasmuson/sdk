@@ -42,13 +42,12 @@ class GCMarker : public ValueObject {
                         HandleVisitor* visitor,
                         bool visit_prologue_weak_persistent_handles);
   void IterateWeakReferences(Isolate* isolate, MarkingVisitor* visitor);
-  void DrainMarkingStack(Isolate* isolate, MarkingVisitor* visitor);
   void ProcessWeakTables(PageSpace* page_space);
   void ProcessObjectIdTable(Isolate* isolate);
 
 
   Heap* heap_;
-  intptr_t marked_bytes_;
+  uintptr_t marked_bytes_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(GCMarker);
 };

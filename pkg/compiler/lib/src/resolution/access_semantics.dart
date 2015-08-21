@@ -2,9 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-// TODO(johnniwinther): Temporarily copied from analyzer2dart. Merge when
-// we shared code with the analyzer and this semantic visitor is complete.
-
 /**
  * Code for classifying the semantics of identifiers appearing in a Dart file.
  */
@@ -143,6 +140,10 @@ enum AccessKind {
 
   /// The destination of the access is unresolved super access.
   UNRESOLVED_SUPER,
+
+  /// The destination is invalid as an access. For instance a prefix used
+  /// as an expression.
+  INVALID,
 }
 
 enum CompoundAccessKind {
@@ -178,7 +179,7 @@ enum CompoundAccessKind {
   /// Read from a superclass getter and write to a superclass field.
   SUPER_GETTER_FIELD,
 
-  /// Read from a superclass where the getter (and maybe setter) is unresolved.
+  /// Read from a superclass where the getter is unresolved.
   UNRESOLVED_SUPER_GETTER,
   /// Read from a superclass getter and write to an unresolved setter.
   UNRESOLVED_SUPER_SETTER,
@@ -188,7 +189,7 @@ enum CompoundAccessKind {
  * Data structure used to classify the semantics of a property access or method
  * or function invocation.
  */
-class AccessSemantics {
+abstract class AccessSemantics {
   /**
    * The kind of access.
    */
@@ -201,42 +202,17 @@ class AccessSemantics {
    */
   Element get element => null;
 
-  /**
-   * The class containing the element being accessed, if this is a static
-   * reference to an element in a class.  This will be null if [kind] is
-   * DYNAMIC, LOCAL_FUNCTION, LOCAL_VARIABLE, PARAMETER, TOPLEVEL_CLASS, or
-   * TYPE_PARAMETER, or if the element being accessed is defined at toplevel
-   * within a library.
-   *
-   * Note: it is possible for [classElement] to be non-null and for [element]
-   * to be null; for example this occurs if the element being accessed is a
-   * non-existent static method or field inside an existing class.
-   */
-  ClassElement get classElement => null;
-
-  // TODO(paulberry): would it also be useful to store the libraryElement?
-
-  // TODO(johnniwinther): Do we need this?
-  /**
-   * When [kind] is DYNAMIC_PROPERTY, the expression whose runtime type
-   * determines the class in which [identifier] should be looked up.
-   *
-   * When [kind] is not DYNAMIC_PROPERTY, this field is always null.
-   */
-  /*Expression*/ get target => null;
-
   ConstantExpression get constant => null;
 
-  AccessSemantics.expression()
-      : kind = AccessKind.EXPRESSION;
+  /// The element for the getter in case of a compound access,
+  /// [element] otherwise.
+  Element get getter => element;
 
-  AccessSemantics.thisAccess()
-      : kind = AccessKind.THIS;
+  /// The element for the setter in case of a compound access,
+  /// [element] otherwise.
+  Element get setter => element;
 
-  AccessSemantics.thisProperty()
-      : kind = AccessKind.THIS_PROPERTY;
-
-  AccessSemantics._(this.kind);
+  const AccessSemantics._(this.kind);
 
   String toString() {
     StringBuffer sb = new StringBuffer();
@@ -244,8 +220,8 @@ class AccessSemantics {
     sb.write('kind=$kind,');
     if (element != null) {
       sb.write('element=');
-      if (classElement != null) {
-        sb.write('${classElement.name}.');
+      if (element.enclosingClass != null) {
+        sb.write('${element.enclosingClass.name}.');
       }
       sb.write('${element}');
     }
@@ -256,12 +232,19 @@ class AccessSemantics {
 
 
 class DynamicAccess extends AccessSemantics {
-  final target;
+  const DynamicAccess.expression()
+      : super._(AccessKind.EXPRESSION);
 
-  DynamicAccess.dynamicProperty(this.target)
+  const DynamicAccess.thisAccess()
+      : super._(AccessKind.THIS);
+
+  const DynamicAccess.thisProperty()
+      : super._(AccessKind.THIS_PROPERTY);
+
+  const DynamicAccess.dynamicProperty()
       : super._(AccessKind.DYNAMIC_PROPERTY);
 
-  DynamicAccess.ifNotNullProperty(this.target)
+  const DynamicAccess.ifNotNullProperty()
       : super._(AccessKind.CONDITIONAL_DYNAMIC_PROPERTY);
 }
 
@@ -283,8 +266,6 @@ class ConstantAccess extends AccessSemantics {
 
 class StaticAccess extends AccessSemantics {
   final Element element;
-
-  ClassElement get classElement => element.enclosingClass;
 
   StaticAccess._(AccessKind kind, this.element)
       : super._(kind);
@@ -357,6 +338,9 @@ class StaticAccess extends AccessSemantics {
 
   StaticAccess.unresolvedSuper(this.element)
       : super._(AccessKind.UNRESOLVED_SUPER);
+
+  StaticAccess.invalid(this.element)
+      : super._(AccessKind.INVALID);
 }
 
 class CompoundAccessSemantics extends AccessSemantics {

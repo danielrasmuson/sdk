@@ -22,7 +22,7 @@
       </div>
 
       <div class="memberItem" title="Space for this object in memory">
-        <div class="memberName">size</div>
+        <div class="memberName">shallow size</div>
         <div class="memberValue">{{ object.size | formatSize }}</div>
       </div>
 
@@ -46,21 +46,27 @@
           <template if="{{ path == null }}">
             <eval-link callback="{{ retainingPath }}"
                        label="[find]"
-                       expr="10">
+                       expr="20">
             </eval-link>
           </template>
           <template if="{{ path != null }}">
+            <template if="{{ path['length'] == 0 }}">
+              &lt;root&gt;
+            </template>
             <template repeat="{{ element in path['elements'] }}">
             <div class="memberItem">
               <div class="memberName">[{{ element['index']}}]</div>
               <div class="memberValue">
-                <any-service-ref ref="{{ element['value'] }}"></any-service-ref>
                 <template if="{{ element['parentField'] != null }}">
-                  in <field-ref ref="{{ element['parentField'] }}"></field-ref> of
+                  from <any-service-ref ref="{{ element['parentField'] }}"></any-service-ref> of
                 </template>
                 <template if="{{ element['parentListIndex'] != null }}">
-                  in [{{ element['parentListIndex'] }}] of
+                  from [{{ element['parentListIndex'] }}] of
                 </template>
+                <template if="{{ element['_parentWordOffset'] != null }}">
+                  from word[{{ element['_parentWordOffset'] }}] of
+                </template>
+                <any-service-ref ref="{{ element['value'] }}"></any-service-ref>
               </div>
               </div>
             </template>
@@ -86,6 +92,9 @@
             </eval-link>
           </template>
           <template if="{{ inboundReferences != null }}">
+            <template if="{{ inboundReferences['references'].length == 0 }}">
+              &lt;root&gt;
+            </template>
             <template repeat="{{ reference in inboundReferences['references'] }}">
               <inbound-reference ref="{{ reference }}"></inbound-reference>
             </template>

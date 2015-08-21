@@ -5,10 +5,10 @@
 import "dart:async";
 import "package:expect/expect.dart";
 import "package:async_helper/async_helper.dart";
-import "package:compiler/src/dart2jslib.dart";
+import "package:compiler/src/diagnostics/messages.dart";
 import "package:compiler/src/elements/elements.dart";
-import "package:compiler/src/resolution/resolution.dart";
-import "package:compiler/src/util/util.dart";
+import "package:compiler/src/resolution/members.dart";
+import "package:compiler/src/diagnostics/spannable.dart";
 import "mock_compiler.dart";
 
 
@@ -25,7 +25,8 @@ class CallbackMockCompiler extends MockCompiler {
                      MessageKind messageKind,
                      [Map arguments = const {}]) {
     if (onWarning != null) {
-      onWarning(this, node, messageKind.message(arguments));
+      MessageTemplate template = MessageTemplate.TEMPLATES[messageKind];
+      onWarning(this, node, template.message(arguments));
     }
     super.reportWarning(node, messageKind, arguments);
   }
@@ -34,7 +35,8 @@ class CallbackMockCompiler extends MockCompiler {
                    MessageKind messageKind,
                    [Map arguments = const {}]) {
     if (onError != null) {
-      onError(this, node, messageKind.message(arguments));
+      MessageTemplate template = MessageTemplate.TEMPLATES[messageKind];
+      onError(this, node, template.message(arguments));
     }
     super.reportError(node, messageKind, arguments);
   }

@@ -38,6 +38,10 @@
         </template>
         class {{ cls.name }}
       </h1>
+
+      <object-common object="{{ cls }}"></object-common>
+      <br>
+
       <div class="memberList">
         <div class="memberItem">
           <div class="memberName">library</div>
@@ -229,6 +233,10 @@
           </div>
         </template>
       </div>
+      <sample-buffer-control id="sampleBufferControl"></sample-buffer-control>
+      <br>
+      <stack-trace-tree-config id="stackTraceTreeConfig"></stack-trace-tree-config>
+      <br>
       <div class="flex-row centered">
         <div class="flex-item-90-percent outlined" style="margin: 16px; margin-left: 8px; margin-right: 8px">
           <cpu-profile-tree id="cpuProfileTree"></cpu-profile-tree>
@@ -236,9 +244,8 @@
       </div>
     </div>
 
-    <hr>
-
     <div class="content-centered-big">
+      <hr>
       <source-inset location="{{ cls.location }}">
       </source-inset>
     </div>

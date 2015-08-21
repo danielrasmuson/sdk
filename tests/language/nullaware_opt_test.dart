@@ -27,7 +27,6 @@ test() {
   Expect.equals(null, c?.m(bomb()));
   Expect.equals(null, getNull()?.anything(bomb()));
   Expect.equals(1, d?.m(1));
-  Expect.equals("C", C?.toString());
 
   Expect.equals(1, new C(1)?.f);
   Expect.equals(null, c?.v);
@@ -54,6 +53,12 @@ test() {
   Expect.equals(201, e.f);
 
   var x = 5 ?? bomb();
+  Expect.equals(5, x);
+
+  var y;
+  x = y ?? 1;
+  Expect.equals(1, x);
+  Expect.equals(null, y);
 }
 
 // Check that instructions without result do not crash.

@@ -24,11 +24,13 @@ main (x, y) {
 };
 
 main() {
-  var compiler = compilerFor(MEMORY_SOURCE_FILES,
-                             options: ['--trust-type-annotations']);
-  asyncTest(() => compiler.runCompiler(Uri.parse('memory:main.dart')).then((_) {
-    var element = compiler.mainApp.findExported('main');
+  asyncTest(() async {
+    var result = await runCompiler(
+        memorySourceFiles: MEMORY_SOURCE_FILES,
+        options: ['--trust-type-annotations']);
+    var compiler = result.compiler;
+    var element = compiler.mainFunction;
     var code = compiler.backend.assembleCode(element);
     Expect.isTrue(code.contains('+'), code);
-  }));
+  });
 }

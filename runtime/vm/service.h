@@ -39,8 +39,10 @@ class ServiceIdZone {
 
 class RingServiceIdZone : public ServiceIdZone {
  public:
-  explicit RingServiceIdZone(ObjectIdRing* ring, ObjectIdRing::IdPolicy policy);
+  RingServiceIdZone();
   virtual ~RingServiceIdZone();
+
+  void Init(ObjectIdRing* ring, ObjectIdRing::IdPolicy policy);
 
   // Returned string will be zone allocated.
   virtual char* GetServiceId(const Object& obj);
@@ -108,12 +110,23 @@ class Service : public AllStatic {
                                 const uint8_t* bytes,
                                 intptr_t bytes_len);
 
+  static void SendLogEvent(Isolate* isolate,
+                           int64_t sequence_number,
+                           int64_t timestamp,
+                           intptr_t level,
+                           const String& name,
+                           const String& message,
+                           const Instance& zone,
+                           const Object& error,
+                           const Instance& stack_trace);
+
   // Well-known streams.
   static StreamInfo isolate_stream;
   static StreamInfo debug_stream;
   static StreamInfo gc_stream;
   static StreamInfo echo_stream;
   static StreamInfo graph_stream;
+  static StreamInfo logging_stream;
 
   static bool ListenStream(const char* stream_id);
   static void CancelStream(const char* stream_id);
@@ -133,16 +146,25 @@ class Service : public AllStatic {
 
   static EmbedderServiceHandler* FindIsolateEmbedderHandler(const char* name);
   static EmbedderServiceHandler* FindRootEmbedderHandler(const char* name);
-
+  static bool ScheduleExtensionHandler(const String& name,
+                                       const Array& parameter_keys,
+                                       const Array& parameter_values,
+                                       const Instance& reply_port,
+                                       const Instance& id);
   static void SendEvent(const char* stream_id,
                         const char* event_type,
                         const Object& eventMessage);
+
   // Does not take ownership of 'data'.
   static void SendEventWithData(const char* stream_id,
                                 const char* event_type,
                                 const String& meta,
                                 const uint8_t* data,
                                 intptr_t size);
+
+  static void PostEvent(const char* stream_id,
+                        const char* kind,
+                        JSONStream* event);
 
   static EmbedderServiceHandler* isolate_service_handler_head_;
   static EmbedderServiceHandler* root_service_handler_head_;

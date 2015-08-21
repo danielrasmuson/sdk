@@ -74,7 +74,9 @@ Heap::~Heap() {
 
 
 uword Heap::AllocateNew(intptr_t size) {
-  ASSERT(isolate()->no_safepoint_scope_depth() == 0);
+  ASSERT(Thread::Current()->no_safepoint_scope_depth() == 0);
+  // Currently, only the Dart thread may allocate in new space.
+  isolate()->AssertCurrentThreadIsMutator();
   uword addr = new_space_.TryAllocate(size);
   if (addr == 0) {
     CollectGarbage(kNew);
@@ -88,7 +90,7 @@ uword Heap::AllocateNew(intptr_t size) {
 
 
 uword Heap::AllocateOld(intptr_t size, HeapPage::PageType type) {
-  ASSERT(isolate()->no_safepoint_scope_depth() == 0);
+  ASSERT(Thread::Current()->no_safepoint_scope_depth() == 0);
   uword addr = old_space_.TryAllocate(size, type);
   if (addr != 0) {
     return addr;
@@ -149,7 +151,7 @@ uword Heap::AllocateOld(intptr_t size, HeapPage::PageType type) {
 
 
 uword Heap::AllocatePretenured(intptr_t size) {
-  ASSERT(isolate()->no_safepoint_scope_depth() == 0);
+  ASSERT(Thread::Current()->no_safepoint_scope_depth() == 0);
   uword addr = old_space_.TryAllocateDataBump(size, PageSpace::kControlGrowth);
   if (addr != 0) return addr;
   return AllocateOld(size, HeapPage::kData);
@@ -157,7 +159,7 @@ uword Heap::AllocatePretenured(intptr_t size) {
 
 
 void Heap::AllocateExternal(intptr_t size, Space space) {
-  ASSERT(isolate()->no_safepoint_scope_depth() == 0);
+  ASSERT(Thread::Current()->no_safepoint_scope_depth() == 0);
   if (space == kNew) {
     new_space_.AllocateExternal(size);
     if (new_space_.ExternalInWords() > (FLAG_new_gen_ext_limit * MBInWords)) {
@@ -216,19 +218,22 @@ void Heap::VisitObjects(ObjectVisitor* visitor) const {
 
 
 HeapIterationScope::HeapIterationScope()
-    : StackResource(Thread::Current()->isolate()),
+    : StackResource(Thread::Current()),
       old_space_(isolate()->heap()->old_space()) {
   // It's not yet safe to iterate over a paged space while it's concurrently
   // sweeping, so wait for any such task to complete first.
   MonitorLocker ml(old_space_->tasks_lock());
 #if defined(DEBUG)
   // We currently don't support nesting of HeapIterationScopes.
-  ASSERT(!old_space_->is_iterating_);
-  old_space_->is_iterating_ = true;
+  ASSERT(old_space_->iterating_thread_ != thread());
 #endif
   while (old_space_->tasks() > 0) {
     ml.Wait();
   }
+#if defined(DEBUG)
+  ASSERT(old_space_->iterating_thread_ == NULL);
+  old_space_->iterating_thread_ = thread();
+#endif
   old_space_->set_tasks(1);
 }
 
@@ -236,8 +241,8 @@ HeapIterationScope::HeapIterationScope()
 HeapIterationScope::~HeapIterationScope() {
   MonitorLocker ml(old_space_->tasks_lock());
 #if defined(DEBUG)
-  ASSERT(old_space_->is_iterating_);
-  old_space_->is_iterating_ = false;
+  ASSERT(old_space_->iterating_thread_ == thread());
+  old_space_->iterating_thread_ = NULL;
 #endif
   ASSERT(old_space_->tasks() == 1);
   old_space_->set_tasks(0);
@@ -301,18 +306,39 @@ RawObject* Heap::FindObject(FindObjectVisitor* visitor) const {
 }
 
 
+bool Heap::gc_in_progress() {
+  MutexLocker ml(&gc_in_progress_mutex_);
+  return gc_in_progress_;
+}
+
+
+void Heap::BeginGC() {
+  MutexLocker ml(&gc_in_progress_mutex_);
+  ASSERT(!gc_in_progress_);
+  gc_in_progress_ = true;
+}
+
+
+void Heap::EndGC() {
+  MutexLocker ml(&gc_in_progress_mutex_);
+  ASSERT(gc_in_progress_);
+  gc_in_progress_ = false;
+}
+
+
 void Heap::CollectGarbage(Space space,
                           ApiCallbacks api_callbacks,
                           GCReason reason) {
-  TIMERSCOPE(isolate(), time_gc);
+  Thread* thread = Thread::Current();
   bool invoke_api_callbacks = (api_callbacks == kInvokeApiCallbacks);
   switch (space) {
     case kNew: {
-      VMTagScope tagScope(isolate(), VMTag::kGCNewSpaceTagId);
-      TimelineDurationScope tds(isolate(),
+      RecordBeforeGC(kNew, reason);
+      TimerScope timer(true, &(isolate()->timer_list().time_gc()), thread);
+      VMTagScope tagScope(thread, VMTag::kGCNewSpaceTagId);
+      TimelineDurationScope tds(thread,
                                 isolate()->GetGCStream(),
                                 "CollectNewGeneration");
-      RecordBeforeGC(kNew, reason);
       UpdateClassHeapStatsBeforeGC(kNew);
       new_space_.Scavenge(invoke_api_callbacks);
       isolate()->class_table()->UpdatePromoted();
@@ -327,11 +353,12 @@ void Heap::CollectGarbage(Space space,
     }
     case kOld:
     case kCode: {
-      VMTagScope tagScope(isolate(), VMTag::kGCOldSpaceTagId);
-      TimelineDurationScope tds(isolate(),
+      RecordBeforeGC(kOld, reason);
+      TimerScope timer(true, &(isolate()->timer_list().time_gc()), thread);
+      VMTagScope tagScope(thread, VMTag::kGCOldSpaceTagId);
+      TimelineDurationScope tds(thread,
                                 isolate()->GetGCStream(),
                                 "CollectOldGeneration");
-      RecordBeforeGC(kOld, reason);
       UpdateClassHeapStatsBeforeGC(kOld);
       old_space_.MarkSweep(invoke_api_callbacks);
       RecordAfterGC();
@@ -365,13 +392,14 @@ void Heap::CollectGarbage(Space space) {
 
 
 void Heap::CollectAllGarbage() {
-  TIMERSCOPE(isolate(), time_gc);
+  Thread* thread = Thread::Current();
   {
-    VMTagScope tagScope(isolate(), VMTag::kGCNewSpaceTagId);
-    TimelineDurationScope tds(isolate(),
+    RecordBeforeGC(kNew, kFull);
+    TimerScope timer(true, &(isolate()->timer_list().time_gc()), thread);
+    VMTagScope tagScope(thread, VMTag::kGCNewSpaceTagId);
+    TimelineDurationScope tds(thread,
                               isolate()->GetGCStream(),
                               "CollectNewGeneration");
-    RecordBeforeGC(kNew, kFull);
     UpdateClassHeapStatsBeforeGC(kNew);
     new_space_.Scavenge(kInvokeApiCallbacks);
     isolate()->class_table()->UpdatePromoted();
@@ -380,11 +408,12 @@ void Heap::CollectAllGarbage() {
     PrintStats();
   }
   {
-    VMTagScope tagScope(isolate(), VMTag::kGCOldSpaceTagId);
-    TimelineDurationScope tds(isolate(),
+    RecordBeforeGC(kOld, kFull);
+    TimerScope timer(true, &(isolate()->timer_list().time_gc()), thread);
+    VMTagScope tagScope(thread, VMTag::kGCOldSpaceTagId);
+    TimelineDurationScope tds(thread,
                               isolate()->GetGCStream(),
                               "CollectOldGeneration");
-    RecordBeforeGC(kOld, kFull);
     UpdateClassHeapStatsBeforeGC(kOld);
     old_space_.MarkSweep(kInvokeApiCallbacks);
     RecordAfterGC();
@@ -405,11 +434,12 @@ bool Heap::ShouldPretenure(intptr_t class_id) const {
 void Heap::UpdatePretenurePolicy() {
   if (FLAG_disable_alloc_stubs_after_gc) {
     ClassTable* table = isolate_->class_table();
+    Zone* zone = Thread::Current()->zone();
     for (intptr_t cid = 1; cid < table->NumCids(); ++cid) {
       if (((cid >= kNumPredefinedCids) || (cid == kArrayCid)) &&
           table->IsValidIndex(cid) &&
           table->HasValidClassAt(cid)) {
-        const Class& cls = Class::Handle(isolate_, table->At(cid));
+        const Class& cls = Class::Handle(zone, table->At(cid));
         cls.DisableAllocationStub();
       }
     }
@@ -441,26 +471,6 @@ void Heap::WriteProtect(bool read_only) {
   read_only_ = read_only;
   new_space_.WriteProtect(read_only);
   old_space_.WriteProtect(read_only);
-}
-
-
-uword Heap::TopAddress(Heap::Space space) {
-  if (space == kNew) {
-    return reinterpret_cast<uword>(new_space_.TopAddress());
-  } else {
-    ASSERT(space == kPretenured);
-    return reinterpret_cast<uword>(old_space_.TopAddress());
-  }
-}
-
-
-uword Heap::EndAddress(Heap::Space space) {
-  if (space == kNew) {
-    return reinterpret_cast<uword>(new_space_.EndAddress());
-  } else {
-    ASSERT(space == kPretenured);
-    return reinterpret_cast<uword>(old_space_.EndAddress());
-  }
 }
 
 
@@ -663,8 +673,7 @@ void Heap::PrintToJSONObject(Space space, JSONObject* object) const {
 
 
 void Heap::RecordBeforeGC(Space space, GCReason reason) {
-  ASSERT(!gc_in_progress_);
-  gc_in_progress_ = true;
+  BeginGC();
   stats_.num_++;
   stats_.space_ = space;
   stats_.reason_ = reason;
@@ -694,8 +703,7 @@ void Heap::RecordAfterGC() {
   }
   stats_.after_.new_ = new_space_.GetCurrentUsage();
   stats_.after_.old_ = old_space_.GetCurrentUsage();
-  ASSERT(gc_in_progress_);
-  gc_in_progress_ = false;
+  EndGC();
   if (Service::gc_stream.enabled()) {
     ServiceEvent event(Isolate::Current(), ServiceEvent::kGC);
     event.set_gc_stats(&stats_);
@@ -756,18 +764,6 @@ void Heap::PrintStats() {
     stats_.data_[2],
     stats_.data_[3]);
 }
-
-
-#if defined(DEBUG)
-NoSafepointScope::NoSafepointScope() : StackResource(Isolate::Current()) {
-  isolate()->IncrementNoSafepointScopeDepth();
-}
-
-
-NoSafepointScope::~NoSafepointScope() {
-  isolate()->DecrementNoSafepointScopeDepth();
-}
-#endif  // defined(DEBUG)
 
 
 NoHeapGrowthControlScope::NoHeapGrowthControlScope()

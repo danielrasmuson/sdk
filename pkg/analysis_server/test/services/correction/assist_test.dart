@@ -14,9 +14,10 @@ import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
 import '../../abstract_single_unit.dart';
+import '../../utils.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(AssistProcessorTest);
 }
 
@@ -106,7 +107,9 @@ class AssistProcessorTest extends AbstractSingleUnitTest {
   }
 
   void test_addTypeAnnotation_BAD_privateType_closureParameter() {
-    addSource('/my_lib.dart', '''
+    addSource(
+        '/my_lib.dart',
+        '''
 library my_lib;
 class A {}
 class _B extends A {}
@@ -122,7 +125,9 @@ main() {
   }
 
   void test_addTypeAnnotation_BAD_privateType_declaredIdentifier() {
-    addSource('/my_lib.dart', '''
+    addSource(
+        '/my_lib.dart',
+        '''
 library my_lib;
 class A {}
 class _B extends A {}
@@ -141,7 +146,9 @@ class A<T> {
   }
 
   void test_addTypeAnnotation_BAD_privateType_list() {
-    addSource('/my_lib.dart', '''
+    addSource(
+        '/my_lib.dart',
+        '''
 library my_lib;
 class A {}
 class _B extends A {}
@@ -157,7 +164,9 @@ main() {
   }
 
   void test_addTypeAnnotation_BAD_privateType_variable() {
-    addSource('/my_lib.dart', '''
+    addSource(
+        '/my_lib.dart',
+        '''
 library my_lib;
 class A {}
 class _B extends A {}
@@ -178,7 +187,10 @@ class A {
   final f = 0;
 }
 ''');
-    assertHasAssistAt('final ', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'final ',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class A {
   final int f = 0;
 }
@@ -191,7 +203,10 @@ class A {
   var f = 0;
 }
 ''');
-    assertHasAssistAt('var ', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'var ',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class A {
   int f = 0;
 }
@@ -239,7 +254,10 @@ class A<T> {
   }
 }
 ''');
-    assertHasAssistAt('item in', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'item in',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class A<T> {
   main(List<List<T>> items) {
     for (List<T> item in items) {
@@ -257,14 +275,20 @@ main(List<String> items) {
 }
 ''');
     // on identifier
-    assertHasAssistAt('item in', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'item in',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main(List<String> items) {
   for (String item in items) {
   }
 }
 ''');
     // on "for"
-    assertHasAssistAt('for (', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'for (',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main(List<String> items) {
   for (String item in items) {
   }
@@ -273,7 +297,9 @@ main(List<String> items) {
   }
 
   void test_addTypeAnnotation_declaredIdentifier_OK_addImport_dartUri() {
-    addSource('/my_lib.dart', r'''
+    addSource(
+        '/my_lib.dart',
+        r'''
 import 'dart:async';
 List<Future<int>> getFutures() => null;
 ''');
@@ -284,7 +310,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('future in', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'future in',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 import 'my_lib.dart';
 import 'dart:async';
 main() {
@@ -301,7 +330,10 @@ main(List<String> items) {
   }
 }
 ''');
-    assertHasAssistAt('item in', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'item in',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main(List<String> items) {
   for (final String item in items) {
   }
@@ -317,7 +349,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class A {
   main(List<int> items) {
     List<int> v = items;
@@ -334,7 +369,10 @@ class A<T> {
   }
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class A<T> {
   main(List<T> items) {
     List<T> v = items;
@@ -344,7 +382,9 @@ class A<T> {
   }
 
   void test_addTypeAnnotation_local_OK_addImport_dartUri() {
-    addSource('/my_lib.dart', r'''
+    addSource(
+        '/my_lib.dart',
+        r'''
 import 'dart:async';
 Future<int> getFutureInt() => null;
 ''');
@@ -354,7 +394,10 @@ main() {
   var v = getFutureInt();
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 import 'my_lib.dart';
 import 'dart:async';
 main() {
@@ -365,7 +408,9 @@ main() {
 
   void test_addTypeAnnotation_local_OK_addImport_notLibraryUnit() {
     // prepare library
-    addSource('/my_lib.dart', r'''
+    addSource(
+        '/my_lib.dart',
+        r'''
 import 'dart:async';
 Future<int> getFutureInt() => null;
 ''');
@@ -398,7 +443,9 @@ main() {
     {
       var testFileEdit = change.getFileEdit('/app.dart');
       var resultCode = SourceEdit.applySequence(appCode, testFileEdit.edits);
-      expect(resultCode, '''
+      expect(
+          resultCode,
+          '''
 library my_app;
 import 'my_lib.dart';
 import 'dart:async';
@@ -408,7 +455,9 @@ part 'test.dart';
     {
       var testFileEdit = change.getFileEdit('/test.dart');
       var resultCode = SourceEdit.applySequence(testCode, testFileEdit.edits);
-      expect(resultCode, '''
+      expect(
+          resultCode,
+          '''
 part of my_app;
 main() {
   Future<int> v = getFutureInt();
@@ -418,10 +467,14 @@ main() {
   }
 
   void test_addTypeAnnotation_local_OK_addImport_relUri() {
-    addSource('/aa/bbb/lib_a.dart', r'''
+    addSource(
+        '/aa/bbb/lib_a.dart',
+        r'''
 class MyClass {}
 ''');
-    addSource('/ccc/lib_b.dart', r'''
+    addSource(
+        '/ccc/lib_b.dart',
+        r'''
 import '../aa/bbb/lib_a.dart';
 MyClass newMyClass() => null;
 ''');
@@ -431,7 +484,10 @@ main() {
   var v = newMyClass();
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 import 'ccc/lib_b.dart';
 import 'aa/bbb/lib_a.dart';
 main() {
@@ -446,7 +502,10 @@ main() {
   var v = () => 1;
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   Function v = () => 1;
 }
@@ -459,7 +518,10 @@ main() {
   var v = 0;
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   int v = 0;
 }
@@ -472,7 +534,10 @@ main() {
   var v = <String>[];
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   List<String> v = <String>[];
 }
@@ -487,7 +552,10 @@ main() {
   var x = f();
 }
 ''');
-    assertHasAssistAt('x =', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'x =',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class C {}
 C f() => null;
 main() {
@@ -502,7 +570,10 @@ main() {
   var v = 123;
 }
 ''');
-    assertHasAssistAt('23', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        '23',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   int v = 123;
 }
@@ -515,7 +586,10 @@ main() {
   var abc = 0;
 }
 ''');
-    assertHasAssistAt('bc', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'bc',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   int abc = 0;
 }
@@ -528,7 +602,10 @@ main() {
   var v = 0;
 }
 ''');
-    assertHasAssistAt('var ', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'var ',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   int v = 0;
 }
@@ -541,7 +618,10 @@ main() {
   var v = 123; // marker
 }
 ''');
-    assertHasAssistAt(' // marker', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        ' // marker',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 main() {
   int v = 123; // marker
 }
@@ -603,7 +683,10 @@ main() {
   var v = getValue();
 }
 ''');
-    assertHasAssistAt('var ', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'var ',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 class _A {}
 _A getValue() => new _A();
 main() {
@@ -639,7 +722,10 @@ main() {
   foo((test) {});
 }
 ''');
-    assertHasAssistAt('test', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'test',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 foo(f(int p)) {}
 main() {
   foo((int test) {});
@@ -651,7 +737,10 @@ main() {
     resolveTestUnit('''
 var V = 0;
 ''');
-    assertHasAssistAt('var ', DartAssistKind.ADD_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'var ',
+        DartAssistKind.ADD_TYPE_ANNOTATION,
+        '''
 int V = 0;
 ''');
   }
@@ -678,7 +767,9 @@ main() {
 }
 List<int> readBytes() => <int>[];
 ''');
-    assertHasAssistAt('readBytes();', DartAssistKind.ASSIGN_TO_LOCAL_VARIABLE,
+    assertHasAssistAt(
+        'readBytes();',
+        DartAssistKind.ASSIGN_TO_LOCAL_VARIABLE,
         '''
 main() {
   List<int> bytes;
@@ -686,10 +777,11 @@ main() {
 }
 List<int> readBytes() => <int>[];
 ''');
-    _assertLinkedGroup(change.linkedEditGroups[0], [
-      'readBytes = '
-    ], expectedSuggestions(
-        LinkedEditSuggestionKind.VARIABLE, ['list', 'bytes2', 'readBytes']));
+    _assertLinkedGroup(
+        change.linkedEditGroups[0],
+        ['readBytes = '],
+        expectedSuggestions(LinkedEditSuggestionKind.VARIABLE,
+            ['list', 'bytes2', 'readBytes']));
   }
 
   void test_assignToLocalVariable_alreadyAssignment() {
@@ -735,17 +827,52 @@ void f() {}
     resolveTestUnit('''
 setup(x) {}
 main() {
-  setup(() => print('done'));
+  setup(() => 42);
 }
 ''');
-    assertHasAssistAt('() => print', DartAssistKind.CONVERT_INTO_BLOCK_BODY, '''
+    assertHasAssistAt(
+        '() => 42',
+        DartAssistKind.CONVERT_INTO_BLOCK_BODY,
+        '''
 setup(x) {}
 main() {
   setup(() {
-    return print('done');
+    return 42;
   });
 }
 ''');
+    {
+      Position exitPos = change.selection;
+      expect(exitPos, isNotNull);
+      expect(exitPos.file, testFile);
+      expect(exitPos.offset - 3, resultCode.indexOf('42;'));
+    }
+  }
+
+  void test_convertToBlockBody_OK_closure_voidExpression() {
+    resolveTestUnit('''
+setup(x) {}
+main() {
+  setup(() => print('done'));
+}
+''');
+    assertHasAssistAt(
+        '() => print',
+        DartAssistKind.CONVERT_INTO_BLOCK_BODY,
+        '''
+setup(x) {}
+main() {
+  setup(() {
+    print('done');
+  });
+}
+''');
+    {
+      Position exitPos = change.selection;
+      expect(exitPos, isNotNull);
+      expect(exitPos.file, testFile);
+      expect(exitPos.offset - 3, resultCode.indexOf("');"));
+    }
   }
 
   void test_convertToBlockBody_OK_constructor() {
@@ -754,7 +881,10 @@ class A {
   factory A() => null;
 }
 ''');
-    assertHasAssistAt('A()', DartAssistKind.CONVERT_INTO_BLOCK_BODY, '''
+    assertHasAssistAt(
+        'A()',
+        DartAssistKind.CONVERT_INTO_BLOCK_BODY,
+        '''
 class A {
   factory A() {
     return null;
@@ -769,7 +899,10 @@ class A {
   mmm() => 123;
 }
 ''');
-    assertHasAssistAt('mmm()', DartAssistKind.CONVERT_INTO_BLOCK_BODY, '''
+    assertHasAssistAt(
+        'mmm()',
+        DartAssistKind.CONVERT_INTO_BLOCK_BODY,
+        '''
 class A {
   mmm() {
     return 123;
@@ -782,7 +915,10 @@ class A {
     resolveTestUnit('''
 fff() => 123;
 ''');
-    assertHasAssistAt('fff()', DartAssistKind.CONVERT_INTO_BLOCK_BODY, '''
+    assertHasAssistAt(
+        'fff()',
+        DartAssistKind.CONVERT_INTO_BLOCK_BODY,
+        '''
 fff() {
   return 123;
 }
@@ -793,7 +929,10 @@ fff() {
     resolveTestUnit('''
 fff() => 123;
 ''');
-    assertHasAssistAt('23;', DartAssistKind.CONVERT_INTO_BLOCK_BODY, '''
+    assertHasAssistAt(
+        '23;',
+        DartAssistKind.CONVERT_INTO_BLOCK_BODY,
+        '''
 fff() {
   return 123;
 }
@@ -825,10 +964,33 @@ main() {
   });
 }
 ''');
-    assertHasAssistAt('42;', DartAssistKind.CONVERT_INTO_EXPRESSION_BODY, '''
+    assertHasAssistAt(
+        '42;',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
 setup(x) {}
 main() {
   setup(() => 42);
+}
+''');
+  }
+
+  void test_convertToExpressionBody_OK_closure_voidExpression() {
+    resolveTestUnit('''
+setup(x) {}
+main() {
+  setup(() {
+    print('test');
+  });
+}
+''');
+    assertHasAssistAt(
+        'print(',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
+setup(x) {}
+main() {
+  setup(() => print('test'));
 }
 ''');
   }
@@ -841,7 +1003,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('A()', DartAssistKind.CONVERT_INTO_EXPRESSION_BODY, '''
+    assertHasAssistAt(
+        'A()',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
 class A {
   factory A() => null;
 }
@@ -854,7 +1019,10 @@ fff() {
   return 42;
 }
 ''');
-    assertHasAssistAt('{', DartAssistKind.CONVERT_INTO_EXPRESSION_BODY, '''
+    assertHasAssistAt(
+        '{',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
 fff() => 42;
 ''');
   }
@@ -865,7 +1033,10 @@ fff() {
   return 42;
 }
 ''');
-    assertHasAssistAt('ff()', DartAssistKind.CONVERT_INTO_EXPRESSION_BODY, '''
+    assertHasAssistAt(
+        'ff()',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
 fff() => 42;
 ''');
   }
@@ -878,8 +1049,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('{ // marker',
-        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY, '''
+    assertHasAssistAt(
+        '{ // marker',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
 class A {
   m() => 42;
 }
@@ -892,7 +1065,10 @@ fff() {
   return 42;
 }
 ''');
-    assertHasAssistAt('return', DartAssistKind.CONVERT_INTO_EXPRESSION_BODY, '''
+    assertHasAssistAt(
+        'return',
+        DartAssistKind.CONVERT_INTO_EXPRESSION_BODY,
+        '''
 fff() => 42;
 ''');
   }
@@ -968,7 +1144,10 @@ class A {
   A(int aaa, int bbb) : aaa2 = aaa, bbb2 = bbb;
 }
 ''');
-    assertHasAssistAt('aaa, ', DartAssistKind.CONVERT_TO_FIELD_PARAMETER, '''
+    assertHasAssistAt(
+        'aaa, ',
+        DartAssistKind.CONVERT_TO_FIELD_PARAMETER,
+        '''
 class A {
   double aaa2;
   int bbb2;
@@ -985,7 +1164,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('test {', DartAssistKind.CONVERT_TO_FIELD_PARAMETER, '''
+    assertHasAssistAt(
+        'test {',
+        DartAssistKind.CONVERT_TO_FIELD_PARAMETER,
+        '''
 class A {
   int test2;
   A(this.test2) {
@@ -1002,7 +1184,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('test)', DartAssistKind.CONVERT_TO_FIELD_PARAMETER, '''
+    assertHasAssistAt(
+        'test)',
+        DartAssistKind.CONVERT_TO_FIELD_PARAMETER,
+        '''
 class A {
   int test;
   A(this.test) {
@@ -1019,7 +1204,10 @@ class A {
   A(int aaa, int bbb) : aaa2 = aaa, bbb2 = bbb;
 }
 ''');
-    assertHasAssistAt('bbb)', DartAssistKind.CONVERT_TO_FIELD_PARAMETER, '''
+    assertHasAssistAt(
+        'bbb)',
+        DartAssistKind.CONVERT_TO_FIELD_PARAMETER,
+        '''
 class A {
   double aaa2;
   int bbb2;
@@ -1091,7 +1279,10 @@ main(List<String> items) {
   }
 }
 ''');
-    assertHasAssistAt('item in', DartAssistKind.CONVERT_INTO_FOR_INDEX, '''
+    assertHasAssistAt(
+        'item in',
+        DartAssistKind.CONVERT_INTO_FOR_INDEX,
+        '''
 main(List<String> items) {
   for (int i = 0; i < items.length; i++) {
     String item = items[i];
@@ -1109,7 +1300,10 @@ main(List<String> items) {
   }
 }
 ''');
-    assertHasAssistAt('tring item', DartAssistKind.CONVERT_INTO_FOR_INDEX, '''
+    assertHasAssistAt(
+        'tring item',
+        DartAssistKind.CONVERT_INTO_FOR_INDEX,
+        '''
 main(List<String> items) {
   for (int i = 0; i < items.length; i++) {
     String item = items[i];
@@ -1127,7 +1321,10 @@ main(List<String> items) {
   }
 }
 ''');
-    assertHasAssistAt('for (String', DartAssistKind.CONVERT_INTO_FOR_INDEX, '''
+    assertHasAssistAt(
+        'for (String',
+        DartAssistKind.CONVERT_INTO_FOR_INDEX,
+        '''
 main(List<String> items) {
   for (int i = 0; i < items.length; i++) {
     String item = items[i];
@@ -1145,7 +1342,10 @@ main(List<String> items) {
   }
 }
 ''');
-    assertHasAssistAt('for (String', DartAssistKind.CONVERT_INTO_FOR_INDEX, '''
+    assertHasAssistAt(
+        'for (String',
+        DartAssistKind.CONVERT_INTO_FOR_INDEX,
+        '''
 main(List<String> items) {
   for (int j = 0; j < items.length; j++) {
     String item = items[j];
@@ -1164,7 +1364,10 @@ main(List<String> items) {
   }
 }
 ''');
-    assertHasAssistAt('for (String', DartAssistKind.CONVERT_INTO_FOR_INDEX, '''
+    assertHasAssistAt(
+        'for (String',
+        DartAssistKind.CONVERT_INTO_FOR_INDEX,
+        '''
 main(List<String> items) {
   for (int k = 0; k < items.length; k++) {
     String item = items[k];
@@ -1181,7 +1384,10 @@ main(p) {
   !(p is String);
 }
 ''');
-    assertHasAssistAt('p is', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        'p is',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   p is! String;
 }
@@ -1194,7 +1400,10 @@ main(p) {
   !(p is String);
 }
 ''');
-    assertHasAssistAt('String)', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        'String)',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   p is! String;
 }
@@ -1207,7 +1416,10 @@ main(p) {
   !(p is String);
 }
 ''');
-    assertHasAssistAt('is String', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        'is String',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   p is! String;
 }
@@ -1220,7 +1432,10 @@ main(p) {
   !!(p is String);
 }
 ''');
-    assertHasAssistAt('is String', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        'is String',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   !(p is! String);
 }
@@ -1233,7 +1448,10 @@ main(p) {
   !!(p is String);
 }
 ''');
-    assertHasAssistAt('!(p', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        '!(p',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   !(p is! String);
 }
@@ -1246,7 +1464,10 @@ main(p) {
   !(p is String);
 }
 ''');
-    assertHasAssistAt('!(p', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        '!(p',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   p is! String;
 }
@@ -1259,7 +1480,10 @@ main(p) {
   !(p is String);
 }
 ''');
-    assertHasAssistAt('(p is', DartAssistKind.CONVERT_INTO_IS_NOT, '''
+    assertHasAssistAt(
+        '(p is',
+        DartAssistKind.CONVERT_INTO_IS_NOT,
+        '''
 main(p) {
   p is! String;
 }
@@ -1355,7 +1579,10 @@ main(String str) {
   !str.isEmpty;
 }
 ''');
-    assertHasAssistAt('isEmpty', DartAssistKind.CONVERT_INTO_IS_NOT_EMPTY, '''
+    assertHasAssistAt(
+        'isEmpty',
+        DartAssistKind.CONVERT_INTO_IS_NOT_EMPTY,
+        '''
 main(String str) {
   str.isNotEmpty;
 }
@@ -1368,7 +1595,10 @@ main(String str) {
   !str.isEmpty;
 }
 ''');
-    assertHasAssistAt('str.', DartAssistKind.CONVERT_INTO_IS_NOT_EMPTY, '''
+    assertHasAssistAt(
+        'str.',
+        DartAssistKind.CONVERT_INTO_IS_NOT_EMPTY,
+        '''
 main(String str) {
   str.isNotEmpty;
 }
@@ -1381,7 +1611,10 @@ main(String str) {
   !'text'.isEmpty;
 }
 ''');
-    assertHasAssistAt('isEmpty', DartAssistKind.CONVERT_INTO_IS_NOT_EMPTY, '''
+    assertHasAssistAt(
+        'isEmpty',
+        DartAssistKind.CONVERT_INTO_IS_NOT_EMPTY,
+        '''
 main(String str) {
   'text'.isNotEmpty;
 }
@@ -1436,7 +1669,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('test)', DartAssistKind.CONVERT_TO_NORMAL_PARAMETER, '''
+    assertHasAssistAt(
+        'test)',
+        DartAssistKind.CONVERT_TO_NORMAL_PARAMETER,
+        '''
 class A {
   var test;
   A(test) : test = test {
@@ -1453,7 +1689,10 @@ class A {
   }
 }
 ''');
-    assertHasAssistAt('test)', DartAssistKind.CONVERT_TO_NORMAL_PARAMETER, '''
+    assertHasAssistAt(
+        'test)',
+        DartAssistKind.CONVERT_TO_NORMAL_PARAMETER,
+        '''
 class A {
   int test;
   A(int test) : test = test {
@@ -1470,7 +1709,10 @@ class A {
   A(this.bbb) : aaa = 1.0;
 }
 ''');
-    assertHasAssistAt('bbb)', DartAssistKind.CONVERT_TO_NORMAL_PARAMETER, '''
+    assertHasAssistAt(
+        'bbb)',
+        DartAssistKind.CONVERT_TO_NORMAL_PARAMETER,
+        '''
 class A {
   double aaa;
   int bbb;
@@ -1553,7 +1795,10 @@ main(A a) {
   print(a.test);
 }
 ''');
-    assertHasAssistAt('test = 42', DartAssistKind.ENCAPSULATE_FIELD, '''
+    assertHasAssistAt(
+        'test = 42',
+        DartAssistKind.ENCAPSULATE_FIELD,
+        '''
 class A {
   int _test = 42;
 
@@ -1579,7 +1824,10 @@ main(A a) {
   print(a.test);
 }
 ''');
-    assertHasAssistAt('test = 42', DartAssistKind.ENCAPSULATE_FIELD, '''
+    assertHasAssistAt(
+        'test = 42',
+        DartAssistKind.ENCAPSULATE_FIELD,
+        '''
 class A {
   var _test = 42;
 
@@ -1608,7 +1856,10 @@ bool main(int a, int b) {
   return a $initialOperator b;
 }
 ''');
-      assertHasAssistAt(initialOperator, DartAssistKind.EXCHANGE_OPERANDS, '''
+      assertHasAssistAt(
+          initialOperator,
+          DartAssistKind.EXCHANGE_OPERANDS,
+          '''
 bool main(int a, int b) {
   return b $resultOperator a;
 }
@@ -1622,7 +1873,10 @@ main() {
   1 * 2 * 3 + 4;
 }
 ''');
-    assertHasAssistAt('* 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '* 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 * 3 * 1 + 4;
 }
@@ -1635,7 +1889,10 @@ main() {
   1 + 2 - 3 + 4;
 }
 ''');
-    assertHasAssistAt('+ 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '+ 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 + 1 - 3 + 4;
 }
@@ -1648,7 +1905,10 @@ main() {
   1 + 2 + 3;
 }
 ''');
-    assertHasAssistAt('+ 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '+ 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 + 3 + 1;
 }
@@ -1661,7 +1921,10 @@ main() {
   1 + 2 + 3;
 }
 ''');
-    assertHasAssistAt('+ 3', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '+ 3',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   3 + 1 + 2;
 }
@@ -1674,7 +1937,10 @@ main() {
   1 + 2;
 }
 ''');
-    assertHasAssistAt(' 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        ' 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 + 1;
 }
@@ -1687,7 +1953,10 @@ main() {
   1 + 2;
 }
 ''');
-    assertHasAssistAt('+ 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '+ 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 + 1;
 }
@@ -1701,7 +1970,10 @@ main() {
 }
 ''');
     length = '1 + 2'.length;
-    assertHasAssistAt('1 + 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '1 + 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 + 1;
 }
@@ -1715,7 +1987,10 @@ main() {
 }
 ''');
     length = 2;
-    assertHasAssistAt('+ 2', DartAssistKind.EXCHANGE_OPERANDS, '''
+    assertHasAssistAt(
+        '+ 2',
+        DartAssistKind.EXCHANGE_OPERANDS,
+        '''
 main() {
   2 + 1;
 }
@@ -1784,7 +2059,10 @@ main(x) {
   return x.foo();
 }
 ''');
-    assertHasAssistAt('import ', DartAssistKind.IMPORT_ADD_SHOW, '''
+    assertHasAssistAt(
+        'import ',
+        DartAssistKind.IMPORT_ADD_SHOW,
+        '''
 import 'dart:math' show PI;
 main(x) {
   PI;
@@ -1802,7 +2080,10 @@ main() {
   max(1, 2);
 }
 ''');
-    assertHasAssistAt('import ', DartAssistKind.IMPORT_ADD_SHOW, '''
+    assertHasAssistAt(
+        'import ',
+        DartAssistKind.IMPORT_ADD_SHOW,
+        '''
 import 'dart:math' show E, PI, max;
 main() {
   PI;
@@ -1821,7 +2102,10 @@ main() {
   max(1, 2);
 }
 ''');
-    assertHasAssistAt('art:math', DartAssistKind.IMPORT_ADD_SHOW, '''
+    assertHasAssistAt(
+        'art:math',
+        DartAssistKind.IMPORT_ADD_SHOW,
+        '''
 import 'dart:math' show E, PI, max;
 main() {
   PI;
@@ -1871,10 +2155,11 @@ main(p) {
 ''';
     assertHasAssistAt(
         'is MyType', DartAssistKind.INTRODUCE_LOCAL_CAST_TYPE, expected);
-    _assertLinkedGroup(change.linkedEditGroups[0], [
-      'myTypeName = '
-    ], expectedSuggestions(
-        LinkedEditSuggestionKind.VARIABLE, ['myTypeName', 'typeName', 'name']));
+    _assertLinkedGroup(
+        change.linkedEditGroups[0],
+        ['myTypeName = '],
+        expectedSuggestions(LinkedEditSuggestionKind.VARIABLE,
+            ['myTypeName', 'typeName', 'name']));
     // another good location
     assertHasAssistAt(
         'if (p', DartAssistKind.INTRODUCE_LOCAL_CAST_TYPE, expected);
@@ -1900,10 +2185,11 @@ main(p) {
 ''';
     assertHasAssistAt(
         'is! MyType', DartAssistKind.INTRODUCE_LOCAL_CAST_TYPE, expected);
-    _assertLinkedGroup(change.linkedEditGroups[0], [
-      'myTypeName = '
-    ], expectedSuggestions(
-        LinkedEditSuggestionKind.VARIABLE, ['myTypeName', 'typeName', 'name']));
+    _assertLinkedGroup(
+        change.linkedEditGroups[0],
+        ['myTypeName = '],
+        expectedSuggestions(LinkedEditSuggestionKind.VARIABLE,
+            ['myTypeName', 'typeName', 'name']));
     // another good location
     assertHasAssistAt(
         'if (p', DartAssistKind.INTRODUCE_LOCAL_CAST_TYPE, expected);
@@ -1948,7 +2234,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (', DartAssistKind.INVERT_IF_STATEMENT, '''
+    assertHasAssistAt(
+        'if (',
+        DartAssistKind.INVERT_IF_STATEMENT,
+        '''
 main() {
   if (false) {
     1;
@@ -1968,7 +2257,10 @@ main() {
     1;
 }
 ''');
-    assertHasAssistAt('if (', DartAssistKind.INVERT_IF_STATEMENT, '''
+    assertHasAssistAt(
+        'if (',
+        DartAssistKind.INVERT_IF_STATEMENT,
+        '''
 main() {
   if (false)
     1;
@@ -1988,7 +2280,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (1 == 1 && (2 == 2 || 3 == 3)) {
     print(0);
@@ -2008,7 +2303,10 @@ main() {
 }
 bool isCheck() => false;
 ''');
-    assertHasAssistAt('if (isCheck', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (isCheck',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (isCheck() && 2 == 2) {
     print(0);
@@ -2028,7 +2326,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if ((1 == 1 || 2 == 2) && 3 == 3) {
     print(0);
@@ -2047,7 +2348,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        '1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2066,7 +2370,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2084,7 +2391,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2105,7 +2415,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(1);
@@ -2125,7 +2438,10 @@ main() {
     }
 }
 ''');
-    assertHasAssistAt('if (1 ==', DartAssistKind.JOIN_IF_WITH_INNER, '''
+    assertHasAssistAt(
+        'if (1 ==',
+        DartAssistKind.JOIN_IF_WITH_INNER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2194,7 +2510,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (2 ==', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (2 ==',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && (2 == 2 || 3 == 3)) {
     print(0);
@@ -2214,7 +2533,10 @@ main() {
 }
 bool isCheck() => false;
 ''');
-    assertHasAssistAt('if (isCheck', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (isCheck',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && isCheck()) {
     print(0);
@@ -2234,7 +2556,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (3 == 3', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (3 == 3',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if ((1 == 1 || 2 == 2) && 3 == 3) {
     print(0);
@@ -2253,7 +2578,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (2 == 2', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (2 == 2',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2272,7 +2600,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (2 == 2', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (2 == 2',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2290,7 +2621,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (2 == 2', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (2 == 2',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2311,7 +2645,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (2 == 2', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (2 == 2',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(1);
@@ -2331,7 +2668,10 @@ main() {
     }
 }
 ''');
-    assertHasAssistAt('if (2 == 2', DartAssistKind.JOIN_IF_WITH_OUTER, '''
+    assertHasAssistAt(
+        'if (2 == 2',
+        DartAssistKind.JOIN_IF_WITH_OUTER,
+        '''
 main() {
   if (1 == 1 && 2 == 2) {
     print(0);
@@ -2397,7 +2737,10 @@ main() {
   v = 1;
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.JOIN_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.JOIN_VARIABLE_DECLARATION,
+        '''
 main() {
   var v = 1;
 }
@@ -2494,7 +2837,10 @@ main() {
   v = 1;
 }
 ''');
-    assertHasAssistAt('v;', DartAssistKind.JOIN_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'v;',
+        DartAssistKind.JOIN_VARIABLE_DECLARATION,
+        '''
 main() {
   var v = 1;
 }
@@ -2508,7 +2854,10 @@ main() {
   v = 1;
 }
 ''');
-    assertHasAssistAt('int v', DartAssistKind.JOIN_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'int v',
+        DartAssistKind.JOIN_VARIABLE_DECLARATION,
+        '''
 main() {
   int v = 1;
 }
@@ -2522,7 +2871,10 @@ main() {
   v = 1;
 }
 ''');
-    assertHasAssistAt('var v', DartAssistKind.JOIN_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'var v',
+        DartAssistKind.JOIN_VARIABLE_DECLARATION,
+        '''
 main() {
   var v = 1;
 }
@@ -2595,7 +2947,10 @@ class A {
   int v = 1;
 }
 ''');
-    assertHasAssistAt('v = ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v = ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 class A {
   var v = 1;
 }
@@ -2608,7 +2963,10 @@ class A {
   final int v = 1;
 }
 ''');
-    assertHasAssistAt('v = ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'v = ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 class A {
   final v = 1;
 }
@@ -2621,7 +2979,10 @@ main() {
   int a = 1, b = 2;
 }
 ''');
-    assertHasAssistAt('int ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'int ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 main() {
   var a = 1, b = 2;
 }
@@ -2634,7 +2995,10 @@ main() {
   const int v = 1;
 }
 ''');
-    assertHasAssistAt('int ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'int ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 main() {
   const v = 1;
 }
@@ -2647,7 +3011,10 @@ main() {
   final int v = 1;
 }
 ''');
-    assertHasAssistAt('int ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'int ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 main() {
   final v = 1;
 }
@@ -2658,7 +3025,10 @@ main() {
     resolveTestUnit('''
 int V = 1;
 ''');
-    assertHasAssistAt('int ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'int ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 var V = 1;
 ''');
   }
@@ -2667,7 +3037,10 @@ var V = 1;
     resolveTestUnit('''
 final int V = 1;
 ''');
-    assertHasAssistAt('int ', DartAssistKind.REMOVE_TYPE_ANNOTATION, '''
+    assertHasAssistAt(
+        'int ',
+        DartAssistKind.REMOVE_TYPE_ANNOTATION,
+        '''
 final V = 1;
 ''');
   }
@@ -2680,7 +3053,9 @@ main() {
 }
 ''');
     // on conditional
-    assertHasAssistAt('11 :', DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
+    assertHasAssistAt(
+        '11 :',
+        DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
         '''
 main() {
   var v;
@@ -2692,7 +3067,9 @@ main() {
 }
 ''');
     // on variable
-    assertHasAssistAt('v =', DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
         '''
 main() {
   var v;
@@ -2711,8 +3088,10 @@ main() {
   return true ? 111 : 222;
 }
 ''');
-    assertHasAssistAt('return ',
-        DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE, '''
+    assertHasAssistAt(
+        'return ',
+        DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
+        '''
 main() {
   if (true) {
     return 111;
@@ -2729,7 +3108,9 @@ main() {
   int a = 1, vvv = true ? 111 : 222, b = 2;
 }
 ''');
-    assertHasAssistAt('11 :', DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
+    assertHasAssistAt(
+        '11 :',
+        DartAssistKind.REPLACE_CONDITIONAL_WITH_IF_ELSE,
         '''
 main() {
   int a = 1, vvv, b = 2;
@@ -2769,8 +3150,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (true)',
-        DartAssistKind.REPLACE_IF_ELSE_WITH_CONDITIONAL, '''
+    assertHasAssistAt(
+        'if (true)',
+        DartAssistKind.REPLACE_IF_ELSE_WITH_CONDITIONAL,
+        '''
 main() {
   int vvv;
   vvv = true ? 111 : 222;
@@ -2788,8 +3171,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('if (true)',
-        DartAssistKind.REPLACE_IF_ELSE_WITH_CONDITIONAL, '''
+    assertHasAssistAt(
+        'if (true)',
+        DartAssistKind.REPLACE_IF_ELSE_WITH_CONDITIONAL,
+        '''
 main() {
   return true ? 111 : 222;
 }
@@ -2843,7 +3228,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('&& 2 == 2', DartAssistKind.SPLIT_AND_CONDITION, '''
+    assertHasAssistAt(
+        '&& 2 == 2',
+        DartAssistKind.SPLIT_AND_CONDITION,
+        '''
 main() {
   if (1 == 1) {
     if (2 == 2 && 3 == 3) {
@@ -2865,7 +3253,10 @@ main() {
   }
 }
 ''');
-    assertHasAssistAt('&& false', DartAssistKind.SPLIT_AND_CONDITION, '''
+    assertHasAssistAt(
+        '&& false',
+        DartAssistKind.SPLIT_AND_CONDITION,
+        '''
 main() {
   if (true) {
     if (false) {
@@ -2886,7 +3277,10 @@ main() {
     print(0);
 }
 ''');
-    assertHasAssistAt('&& false', DartAssistKind.SPLIT_AND_CONDITION, '''
+    assertHasAssistAt(
+        '&& false',
+        DartAssistKind.SPLIT_AND_CONDITION,
+        '''
 main() {
   if (true)
     if (false)
@@ -2967,7 +3361,10 @@ main() {
   var v = 1;
 }
 ''');
-    assertHasAssistAt('v =', DartAssistKind.SPLIT_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'v =',
+        DartAssistKind.SPLIT_VARIABLE_DECLARATION,
+        '''
 main() {
   var v;
   v = 1;
@@ -2981,7 +3378,10 @@ main() {
   int v = 1;
 }
 ''');
-    assertHasAssistAt('int ', DartAssistKind.SPLIT_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'int ',
+        DartAssistKind.SPLIT_VARIABLE_DECLARATION,
+        '''
 main() {
   int v;
   v = 1;
@@ -2995,7 +3395,10 @@ main() {
   var v = 1;
 }
 ''');
-    assertHasAssistAt('var ', DartAssistKind.SPLIT_VARIABLE_DECLARATION, '''
+    assertHasAssistAt(
+        'var ',
+        DartAssistKind.SPLIT_VARIABLE_DECLARATION,
+        '''
 main() {
   var v;
   v = 1;
@@ -3022,7 +3425,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_BLOCK, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_BLOCK,
+        '''
 main() {
 // start
   {
@@ -3044,7 +3449,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_DO_WHILE, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_DO_WHILE,
+        '''
 main() {
 // start
   do {
@@ -3066,7 +3473,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_FOR, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_FOR,
+        '''
 main() {
 // start
   for (var v = init; condition; increment) {
@@ -3088,7 +3497,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_FOR_IN, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_FOR_IN,
+        '''
 main() {
 // start
   for (var item in iterable) {
@@ -3110,7 +3521,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_IF, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_IF,
+        '''
 main() {
 // start
   if (condition) {
@@ -3132,7 +3545,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_TRY_CATCH, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_TRY_CATCH,
+        '''
 main() {
 // start
   try {
@@ -3156,7 +3571,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_TRY_FINALLY, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_TRY_FINALLY,
+        '''
 main() {
 // start
   try {
@@ -3180,7 +3597,9 @@ main() {
 }
 ''');
     _setStartEndSelection();
-    assertHasAssist(DartAssistKind.SURROUND_WITH_WHILE, '''
+    assertHasAssist(
+        DartAssistKind.SURROUND_WITH_WHILE,
+        '''
 main() {
 // start
   while (condition) {

@@ -56,15 +56,10 @@ ThreadId ThreadInterrupter::interrupter_thread_id_ =
 Monitor* ThreadInterrupter::monitor_ = NULL;
 intptr_t ThreadInterrupter::interrupt_period_ = 1000;
 intptr_t ThreadInterrupter::current_wait_time_ = Monitor::kNoTimeout;
-ThreadLocalKey ThreadInterrupter::thread_state_key_ =
-    OSThread::kUnsetThreadLocalKey;
 
 
 void ThreadInterrupter::InitOnce() {
   ASSERT(!initialized_);
-  ASSERT(thread_state_key_ == OSThread::kUnsetThreadLocalKey);
-  thread_state_key_ = OSThread::CreateThreadLocal();
-  ASSERT(thread_state_key_ != OSThread::kUnsetThreadLocalKey);
   monitor_ = new Monitor();
   ASSERT(monitor_ != NULL);
   initialized_ = true;
@@ -151,95 +146,6 @@ void ThreadInterrupter::WakeUp() {
     // Notify the interrupter to wake it from its deep sleep.
     ml.Notify();
   }
-}
-
-// Register the currently running thread for interrupts. If the current thread
-// is already registered, callback and data will be updated.
-InterruptableThreadState* ThreadInterrupter::Register(
-    ThreadInterruptCallback callback, void* data) {
-  if (shutdown_) {
-    return NULL;
-  }
-  ASSERT(initialized_);
-  InterruptableThreadState* state = _EnsureThreadStateCreated();
-  // Set callback and data.
-  UpdateStateObject(callback, data);
-  return state;
-}
-
-
-// Unregister the currently running thread for interrupts.
-void ThreadInterrupter::Unregister() {
-  if (shutdown_) {
-    return;
-  }
-  ASSERT(initialized_);
-  _EnsureThreadStateCreated();
-  // Clear callback and data.
-  UpdateStateObject(NULL, NULL);
-}
-
-
-InterruptableThreadState* ThreadInterrupter::_EnsureThreadStateCreated() {
-  InterruptableThreadState* state = CurrentThreadState();
-  if (state == NULL) {
-    // Create thread state object lazily.
-    ThreadId current_thread = OSThread::GetCurrentThreadId();
-    if (FLAG_trace_thread_interrupter) {
-      intptr_t tid = OSThread::ThreadIdToIntPtr(current_thread);
-      OS::Print("ThreadInterrupter Tracking %p\n",
-                reinterpret_cast<void*>(tid));
-    }
-    // Note: We currently do not free a thread's InterruptableThreadState.
-    state = new InterruptableThreadState();
-    ASSERT(state != NULL);
-    state->callback = NULL;
-    state->data = NULL;
-    state->id = current_thread;
-    SetCurrentThreadState(state);
-  }
-  return state;
-}
-
-
-void ThreadInterrupter::UpdateStateObject(ThreadInterruptCallback callback,
-                                          void* data) {
-  InterruptableThreadState* state = CurrentThreadState();
-  ThreadId current_thread = OSThread::GetCurrentThreadId();
-  ASSERT(state != NULL);
-  ASSERT(OSThread::Compare(state->id, OSThread::GetCurrentThreadId()));
-  SetCurrentThreadState(NULL);
-  // It is now safe to modify the state object. If an interrupt occurs,
-  // the current thread state will be NULL.
-  state->callback = callback;
-  state->data = data;
-  SetCurrentThreadState(state);
-  if (FLAG_trace_thread_interrupter) {
-    intptr_t tid = OSThread::ThreadIdToIntPtr(current_thread);
-    if (callback == NULL) {
-      OS::Print("ThreadInterrupter Cleared %p\n", reinterpret_cast<void*>(tid));
-    } else {
-      OS::Print("ThreadInterrupter Updated %p\n", reinterpret_cast<void*>(tid));
-    }
-  }
-}
-
-
-InterruptableThreadState* ThreadInterrupter::GetCurrentThreadState() {
-  return _EnsureThreadStateCreated();
-}
-
-
-InterruptableThreadState* ThreadInterrupter::CurrentThreadState() {
-  InterruptableThreadState* state = reinterpret_cast<InterruptableThreadState*>(
-      OSThread::GetThreadLocal(thread_state_key_));
-  return state;
-}
-
-
-void ThreadInterrupter::SetCurrentThreadState(InterruptableThreadState* state) {
-  OSThread::SetThreadLocal(thread_state_key_,
-                              reinterpret_cast<uword>(state));
 }
 
 

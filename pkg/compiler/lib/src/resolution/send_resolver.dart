@@ -2,7 +2,26 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-part of dart2js.semantics_visitor;
+library dart2js.semantics_visitor.resolver;
+
+import '../constants/expressions.dart';
+import '../dart_types.dart';
+import '../diagnostics/invariant.dart' show
+    invariant;
+import '../diagnostics/messages.dart' show
+    MessageKind;
+import '../diagnostics/spannable.dart' show
+    Spannable,
+    SpannableAssertionFailure;
+import '../elements/elements.dart';
+import '../tree/tree.dart';
+import '../universe/universe.dart';
+
+import 'access_semantics.dart';
+import 'operators.dart';
+import 'semantic_visitor.dart';
+import 'send_structure.dart';
+import 'tree_elements.dart';
 
 enum SendStructureKind {
   GET,
@@ -504,15 +523,15 @@ abstract class SendResolverMixin {
       // Conditional sends (e?.x) are treated as dynamic property reads because
       // they are equivalent to do ((a) => a == null ? null : a.x)(e). If `e` is
       // a type `A`, this is equivalent to write `(A).x`.
-      return new DynamicAccess.ifNotNullProperty(node.receiver);
+      return const DynamicAccess.ifNotNullProperty();
     } else if (node.isOperator) {
-      return new DynamicAccess.dynamicProperty(node.receiver);
+      return const DynamicAccess.dynamicProperty();
     } else if (Elements.isClosureSend(node, element)) {
       if (element == null) {
         if (node.selector.isThis()) {
-          return new AccessSemantics.thisAccess();
+          return new DynamicAccess.thisAccess();
         } else {
-          return new AccessSemantics.expression();
+          return new DynamicAccess.expression();
         }
       } else if (Elements.isErroneous(element)) {
         return new StaticAccess.unresolved(element);
@@ -526,9 +545,9 @@ abstract class SendResolverMixin {
       if (isDynamicAccess(element) &&
            (!isCompound || isDynamicAccess(getter))) {
         if (node.receiver == null || node.receiver.isThis()) {
-          return new AccessSemantics.thisProperty();
+          return const DynamicAccess.thisProperty();
         } else {
-          return new DynamicAccess.dynamicProperty(node.receiver);
+          return const DynamicAccess.dynamicProperty();
         }
       } else if (element != null && element.impliesType) {
         // TODO(johnniwinther): Provide an [ErroneousElement].

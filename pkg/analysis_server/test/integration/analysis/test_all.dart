@@ -6,12 +6,14 @@ library test.integration.analysis.all;
 
 import 'package:unittest/unittest.dart';
 
+import '../../utils.dart';
 import 'error_test.dart' as error_test;
 import 'get_errors_after_analysis_test.dart' as get_errors_after_analysis_test;
 import 'get_errors_before_analysis_test.dart'
     as get_errors_before_analysis_test;
 import 'get_hover_test.dart' as get_hover_test;
 import 'highlights_test.dart' as highlights_test;
+import 'highlights_test2.dart' as highlights_test2;
 import 'navigation_test.dart' as navigation_test;
 import 'occurrences_test.dart' as occurrences_test;
 import 'outline_test.dart' as outline_test;
@@ -26,13 +28,14 @@ import 'update_content_test.dart' as update_content_test;
  * Utility for manually running all integration tests.
  */
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   group('analysis', () {
     error_test.main();
     get_errors_after_analysis_test.main();
     get_errors_before_analysis_test.main();
     get_hover_test.main();
     highlights_test.main();
+    highlights_test2.main();
     navigation_test.main();
     occurrences_test.main();
     outline_test.main();

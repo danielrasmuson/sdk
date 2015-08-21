@@ -23,15 +23,20 @@ DECLARE_FLAG(bool, trace_service);
 JSONStream::JSONStream(intptr_t buf_size)
     : open_objects_(0),
       buffer_(buf_size),
-      default_id_zone_(Isolate::Current()->object_id_ring(),
-                       ObjectIdRing::kAllocateId),
+      default_id_zone_(),
       id_zone_(&default_id_zone_),
       reply_port_(ILLEGAL_PORT),
-      seq_(""),
+      seq_(NULL),
       method_(""),
       param_keys_(NULL),
       param_values_(NULL),
       num_params_(0) {
+  ObjectIdRing* ring = NULL;
+  Isolate* isolate = Isolate::Current();
+  if (isolate != NULL) {
+    ring = isolate->object_id_ring();
+  }
+  default_id_zone_.Init(ring, ObjectIdRing::kAllocateId);
 }
 
 
@@ -41,12 +46,12 @@ JSONStream::~JSONStream() {
 
 void JSONStream::Setup(Zone* zone,
                        Dart_Port reply_port,
-                       const String& seq,
+                       const Instance& seq,
                        const String& method,
                        const Array& param_keys,
                        const Array& param_values) {
   set_reply_port(reply_port);
-  seq_ = seq.ToCString();
+  seq_ = &Instance::ZoneHandle(seq.raw());
   method_ = method.ToCString();
 
   String& string_iterator = String::Handle();
@@ -74,13 +79,13 @@ void JSONStream::Setup(Zone* zone,
               isolate_name, method_);
     setup_time_micros_ = OS::GetCurrentTimeMicros();
   }
-  buffer_.Printf("{\"json-rpc\":\"2.0\", \"result\":");
+  buffer_.Printf("{\"jsonrpc\":\"2.0\", \"result\":");
 }
 
 
 void JSONStream::SetupError() {
   buffer_.Clear();
-  buffer_.Printf("{\"json-rpc\":\"2.0\", \"error\":");
+  buffer_.Printf("{\"jsonrpc\":\"2.0\", \"error\":");
 }
 
 
@@ -103,8 +108,7 @@ static const char* GetJSONRpcErrorMessage(intptr_t code) {
     case kCannotAddBreakpoint:
       return "Cannot add breakpoint";
     default:
-      UNIMPLEMENTED();
-      return "Unexpected rpc error code";
+      return "Extension error";
   }
 }
 
@@ -154,6 +158,20 @@ static uint8_t* allocator(uint8_t* ptr, intptr_t old_size, intptr_t new_size) {
 }
 
 
+void JSONStream::PostNullReply(Dart_Port port) {
+  const Object& reply = Object::Handle(Object::null());
+  ASSERT(reply.IsNull());
+
+  uint8_t* data = NULL;
+  MessageWriter writer(&data, &allocator, false);
+  writer.WriteMessage(reply);
+  PortMap::PostMessage(new Message(port,
+                                   data,
+                                   writer.BytesWritten(),
+                                   Message::kNormalPriority));
+}
+
+
 void JSONStream::PostReply() {
   Dart_Port port = reply_port();
   ASSERT(port != ILLEGAL_PORT);
@@ -162,8 +180,23 @@ void JSONStream::PostReply() {
   if (FLAG_trace_service) {
     process_delta_micros = OS::GetCurrentTimeMicros() - setup_time_micros_;
   }
-  // TODO(turnidge): Handle non-string sequence numbers.
-  buffer_.Printf(", \"id\":\"%s\"}", seq());
+  ASSERT(seq_ != NULL);
+  if (seq_->IsString()) {
+    const String& str = String::Cast(*seq_);
+    PrintProperty("id", str.ToCString());
+  } else if (seq_->IsInteger()) {
+    const Integer& integer = Integer::Cast(*seq_);
+    PrintProperty64("id", integer.AsInt64Value());
+  } else if (seq_->IsDouble()) {
+    const Double& dbl = Double::Cast(*seq_);
+    PrintProperty("id", dbl.value());
+  } else if (seq_->IsNull()) {
+    // JSON-RPC 2.0 says that a request with a null ID shouldn't get a reply.
+    PostNullReply(port);
+    return;
+  }
+  buffer_.AddChar('}');
+
   const String& reply = String::Handle(String::New(ToCString()));
   ASSERT(!reply.IsNull());
 
@@ -267,6 +300,11 @@ void JSONStream::PrintValue(intptr_t i) {
 void JSONStream::PrintValue64(int64_t i) {
   PrintCommaIfNeeded();
   buffer_.Printf("%" Pd64 "", i);
+}
+
+
+void JSONStream::PrintValueTimeMillis(int64_t millis) {
+  PrintValue(static_cast<double>(millis));
 }
 
 
@@ -422,6 +460,11 @@ void JSONStream::PrintProperty64(const char* name, int64_t i) {
 }
 
 
+void JSONStream::PrintPropertyTimeMillis(const char* name, int64_t millis) {
+  PrintProperty(name, static_cast<double>(millis));
+}
+
+
 void JSONStream::PrintProperty(const char* name, double d) {
   PrintPropertyName(name);
   PrintValue(d);
@@ -508,6 +551,14 @@ void JSONStream::PrintfProperty(const char* name, const char* format, ...) {
   AddEscapedUTF8String(p);
   buffer_.AddChar('"');
   free(p);
+}
+
+
+void JSONStream::Steal(const char** buffer, intptr_t* buffer_length) {
+  ASSERT(buffer != NULL);
+  ASSERT(buffer_length != NULL);
+  *buffer_length = buffer_.length();
+  *buffer = buffer_.Steal();
 }
 
 

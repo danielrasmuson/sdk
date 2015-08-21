@@ -52,12 +52,12 @@ class Message {
   }
 
   Message.fromUri(this.client, Uri uri)
-      : method = _methodNameFromUri(uri) {
+      : serial = '', method = _methodNameFromUri(uri) {
     params.addAll(uri.queryParameters);
   }
 
   Message.forIsolate(this.client, Uri uri, RunningIsolate isolate)
-      : method = _methodNameFromUri(uri) {
+      : serial = '', method = _methodNameFromUri(uri) {
     params.addAll(uri.queryParameters);
     params['isolateId'] = isolate.serviceId;
   }
@@ -94,7 +94,6 @@ class Message {
     final receivePort = new RawReceivePort();
     receivePort.handler = (value) {
       receivePort.close();
-      assert(value is String);
       _completer.complete(value);
     };
     var keys = _makeAllString(params.keys.toList(growable:false));
@@ -102,7 +101,7 @@ class Message {
     var request = new List(6)
         ..[0] = 0  // Make room for OOB message type.
         ..[1] = receivePort.sendPort
-        ..[2] = serial.toString()
+        ..[2] = serial
         ..[3] = method
         ..[4] = keys
         ..[5] = values;
@@ -121,7 +120,6 @@ class Message {
     final receivePort = new RawReceivePort();
     receivePort.handler = (value) {
       receivePort.close();
-      assert(value is String);
       _completer.complete(value);
     };
     var keys = _makeAllString(params.keys.toList(growable:false));
@@ -129,7 +127,7 @@ class Message {
     var request = new List(6)
         ..[0] = 0  // Make room for OOB message type.
         ..[1] = receivePort.sendPort
-        ..[2] = serial.toString()
+        ..[2] = serial
         ..[3] = method
         ..[4] = keys
         ..[5] = values;
@@ -141,19 +139,9 @@ class Message {
     _completer.complete(response);
   }
 
-  void setErrorResponse(String message) {
-    var response = {
-      'id': serial,
-      'result' : {
-        'type': 'Error',
-        'message': message,
-        'request': {
-          'method': method,
-          'params': params
-        }
-      }
-    };
-    _completer.complete(JSON.encode(response));
+  void setErrorResponse(int code, String details) {
+    _completer.complete(encodeRpcError(this, code,
+                                       details: '$method: $details'));
   }
 }
 

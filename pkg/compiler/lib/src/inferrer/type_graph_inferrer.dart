@@ -6,6 +6,11 @@ library type_graph_inferrer;
 
 import 'dart:collection' show Queue, IterableBase;
 
+import '../common/names.dart'
+    show Identifiers,
+         Names;
+import '../compiler.dart'
+    show Compiler;
 import '../constants/values.dart';
 import '../cps_ir/cps_ir_nodes.dart' as cps_ir
     show Node;
@@ -14,15 +19,14 @@ import '../dart_types.dart'
          FunctionType,
          InterfaceType,
          TypeKind;
-import '../dart2jslib.dart'
-    show ClassWorld,
-         Compiler,
-         Constant,
-         FunctionConstant,
-         invariant,
-         TreeElementMapping;
+import '../diagnostics/invariant.dart'
+    show invariant;
+import '../diagnostics/spannable.dart'
+    show Spannable;
 import '../elements/elements.dart';
 import '../native/native.dart' as native;
+import '../resolution/tree_elements.dart'
+    show TreeElementMapping;
 import '../tree/tree.dart' as ast
     show DartString,
          Node,
@@ -44,9 +48,9 @@ import '../universe/universe.dart'
          TypedSelector;
 import '../util/util.dart'
     show ImmutableEmptySet,
-         Setlet,
-         Spannable;
+         Setlet;
 import '../js_backend/js_backend.dart' show Annotations, JavaScriptBackend;
+import '../world.dart' show ClassWorld;
 
 import 'inferrer_visitor.dart'
     show ArgumentsTypes,
@@ -579,14 +583,14 @@ class TypeGraphInferrerEngine
    */
   final Set<Selector> _returnsListElementTypeSet = new Set<Selector>.from(
     <Selector>[
-      new Selector.getter('first', null),
-      new Selector.getter('last', null),
-      new Selector.getter('single', null),
-      new Selector.call('singleWhere', null, 1),
-      new Selector.call('elementAt', null, 1),
+      new Selector.getter(const PublicName('first')),
+      new Selector.getter(const PublicName('last')),
+      new Selector.getter(const PublicName('single')),
+      new Selector.call(const PublicName('singleWhere'), 1),
+      new Selector.call(const PublicName('elementAt'), 1),
       new Selector.index(),
-      new Selector.call('removeAt', null, 1),
-      new Selector.call('removeLast', null, 0)
+      new Selector.call(const PublicName('removeAt'), 1),
+      new Selector.call(const PublicName('removeLast'), 0)
     ]);
 
   bool returnsListElementType(Selector selector, TypeMask mask) {
@@ -680,6 +684,7 @@ class TypeGraphInferrerEngine
 
     // Trace closures to potentially infer argument types.
     types.allocatedClosures.forEach((info) {
+
       void trace(Iterable<FunctionElement> elements,
                  ClosureTracerVisitor tracer) {
         tracer.run();
@@ -713,16 +718,31 @@ class TypeGraphInferrerEngine
           }
         });
       }
+
       if (info is ClosureTypeInformation) {
         Iterable<FunctionElement> elements = [info.element];
         trace(elements, new ClosureTracerVisitor(elements, info, this));
       } else if (info is CallSiteTypeInformation) {
-        // We only are interested in functions here, as other targets
-        // of this closure call are not a root to trace but an intermediate
-        // for some other function.
-        Iterable<FunctionElement> elements = info.callees
-            .where((e) => e.isFunction);
-        trace(elements, new ClosureTracerVisitor(elements, info, this));
+        if (info is StaticCallSiteTypeInformation &&
+            info.selector != null &&
+            info.selector.isCall) {
+          // This is a constructor call to a class with a call method. So we
+          // need to trace the call method here.
+          assert(info.calledElement.isConstructor);
+          ClassElement cls = info.calledElement.enclosingClass;
+          FunctionElement callMethod = cls.lookupMember(Identifiers.call);
+          assert(invariant(cls, callMethod != null));
+          Iterable<FunctionElement> elements = [callMethod];
+          trace(elements, new ClosureTracerVisitor(elements, info, this));
+        } else {
+          // We only are interested in functions here, as other targets
+          // of this closure call are not a root to trace but an intermediate
+          // for some other function.
+          Iterable<FunctionElement> elements =
+              new List<FunctionElement>.from(
+                  info.callees.where((e) => e.isFunction));
+          trace(elements, new ClosureTracerVisitor(elements, info, this));
+        }
       } else {
         assert(info is ElementTypeInformation);
         trace([info.element],
@@ -774,6 +794,10 @@ class TypeGraphInferrerEngine
               print('${types.getInferredTypeOf(target).type} for ${target}');
             }
           }
+        } else if (info is StaticCallSiteTypeInformation) {
+          ClassElement cls = info.calledElement.enclosingClass;
+          FunctionElement callMethod = cls.lookupMember(Identifiers.call);
+          print('${types.getInferredSignatureOf(callMethod)} for ${cls}');
         } else {
           print('${info.type} for some unknown kind of closure');
         }
@@ -923,7 +947,7 @@ class TypeGraphInferrerEngine
                                   Selector selector,
                                   TypeMask mask,
                                   {bool remove, bool addToQueue: true}) {
-    if (callee.name == Compiler.NO_SUCH_METHOD) return;
+    if (callee.name == Identifiers.noSuchMethod_) return;
     if (callee.isField) {
       if (selector.isSetter) {
         ElementTypeInformation info = types.getInferredTypeOf(callee);
@@ -1108,6 +1132,14 @@ class TypeGraphInferrerEngine
     CallSiteTypeInformation info = new StaticCallSiteTypeInformation(
           types.currentMember, node, caller, callee, selector, mask, arguments,
           inLoop);
+    // If this class has a 'call' method then we have essentially created a
+    // closure here. Register it as such so that it is traced.
+    if (selector != null && selector.isCall && callee.isConstructor) {
+      ClassElement cls = callee.enclosingClass.declaration;
+      if (cls.callType != null) {
+        types.allocatedClosures.add(info);
+      }
+    }
     info.addToGraph(this);
     allocatedCalls.add(info);
     updateSideEffects(sideEffects, selector, callee);
@@ -1230,7 +1262,7 @@ class TypeGraphInferrerEngine
    */
   TypeInformation typeOfElementWithSelector(Element element,
                                             Selector selector) {
-    if (element.name == Compiler.NO_SUCH_METHOD &&
+    if (element.name == Identifiers.noSuchMethod_ &&
         selector.name != element.name) {
       // An invocation can resolve to a [noSuchMethod], in which case
       // we get the return type of [noSuchMethod].

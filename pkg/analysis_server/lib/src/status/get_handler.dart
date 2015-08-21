@@ -1042,7 +1042,7 @@ class GetHandler {
     List<Folder> folders = folderMap.keys.toList();
     folders.sort((Folder first, Folder second) =>
         first.shortName.compareTo(second.shortName));
-    AnalysisOptionsImpl options = analysisServer.contextManager.defaultOptions;
+    AnalysisOptionsImpl options = analysisServer.defaultContextOptions;
     ServerOperationQueue operationQueue = analysisServer.operationQueue;
 
     buffer.write('<h3>Analysis Domain</h3>');
@@ -1084,10 +1084,9 @@ class GetHandler {
       _writeOption(
           buffer, 'Analyze functon bodies', options.analyzeFunctionBodies);
       _writeOption(buffer, 'Cache size', options.cacheSize);
-      _writeOption(buffer, 'Enable null-aware operators',
-          options.enableNullAwareOperators);
       _writeOption(
           buffer, 'Enable strict call checks', options.enableStrictCallChecks);
+      _writeOption(buffer, 'Enable super mixins', options.enableSuperMixins);
       _writeOption(buffer, 'Generate hints', options.hint);
       _writeOption(buffer, 'Generate dart2js hints', options.dart2jsHint);
       _writeOption(buffer, 'Generate errors in implicit files',

@@ -82,9 +82,15 @@ void ClassTable::FreeOldTables() {
 }
 
 
-void ClassTable::TraceAllocationsFor(intptr_t cid, bool trace) {
+void ClassTable::SetTraceAllocationFor(intptr_t cid, bool trace) {
   ClassHeapStats* stats = PreliminaryStatsAt(cid);
   stats->set_trace_allocation(trace);
+}
+
+
+bool ClassTable::TraceAllocationFor(intptr_t cid) {
+  ClassHeapStats* stats = PreliminaryStatsAt(cid);
+  return stats->trace_allocation();
 }
 
 
@@ -450,10 +456,8 @@ intptr_t ClassTable::CounterOffsetFor(intptr_t cid, bool is_new_space) {
 }
 
 
-ClassHeapStats** ClassTable::StateAddressFor(intptr_t cid,
-                                             intptr_t* state_offset) {
-  *state_offset = ClassOffsetFor(cid)+ ClassHeapStats::state_offset();
-  return TableAddressFor(cid);
+intptr_t ClassTable::StateOffsetFor(intptr_t cid) {
+  return ClassOffsetFor(cid)+ ClassHeapStats::state_offset();
 }
 
 

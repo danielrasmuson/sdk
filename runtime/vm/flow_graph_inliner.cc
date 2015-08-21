@@ -687,7 +687,7 @@ class CallSiteInliner : public ValueObject {
       bool in_cache;
       ParsedFunction* parsed_function;
       {
-        CSTAT_TIMER_SCOPE(isolate(), graphinliner_parse_timer);
+        CSTAT_TIMER_SCOPE(thread(), graphinliner_parse_timer);
         if (!Compiler::always_optimize()) {
           const Error& error = Error::Handle(Z,
               Compiler::EnsureUnoptimizedCode(Thread::Current(), function));
@@ -713,7 +713,7 @@ class CallSiteInliner : public ValueObject {
       builder.SetInitialBlockId(caller_graph_->max_block_id());
       FlowGraph* callee_graph;
       {
-        CSTAT_TIMER_SCOPE(isolate(), graphinliner_build_timer);
+        CSTAT_TIMER_SCOPE(thread(), graphinliner_build_timer);
         callee_graph = builder.BuildGraph();
       }
 
@@ -767,7 +767,7 @@ class CallSiteInliner : public ValueObject {
       block_scheduler.AssignEdgeWeights();
 
       {
-        CSTAT_TIMER_SCOPE(isolate(), graphinliner_ssa_timer);
+        CSTAT_TIMER_SCOPE(thread(), graphinliner_ssa_timer);
         // Compute SSA on the callee graph, catching bailouts.
         callee_graph->ComputeSSA(caller_graph_->max_virtual_register_number(),
                                  param_stubs);
@@ -775,7 +775,7 @@ class CallSiteInliner : public ValueObject {
       }
 
       {
-        CSTAT_TIMER_SCOPE(isolate(), graphinliner_opt_timer);
+        CSTAT_TIMER_SCOPE(thread(), graphinliner_opt_timer);
         // TODO(zerny): Do more optimization passes on the callee graph.
         FlowGraphOptimizer optimizer(callee_graph);
         if (Compiler::always_optimize()) {
@@ -956,7 +956,7 @@ class CallSiteInliner : public ValueObject {
   }
 
   void InlineCall(InlinedCallData* call_data) {
-    CSTAT_TIMER_SCOPE(Isolate::Current(), graphinliner_subst_timer);
+    CSTAT_TIMER_SCOPE(Thread::Current(), graphinliner_subst_timer);
     FlowGraph* callee_graph = call_data->callee_graph;
     TargetEntryInstr* callee_entry =
         callee_graph->graph_entry()->normal_entry();
@@ -1818,6 +1818,16 @@ void FlowGraphInliner::SetInliningId(FlowGraph* flow_graph,
 }
 
 
+// Use function name to determine if inlineable operator.
+// TODO(srdjan): add names as necessary
+static bool IsInlineableOperator(const Function& function) {
+  return (function.name() == Symbols::IndexToken().raw()) ||
+         (function.name() == Symbols::AssignIndexToken().raw()) ||
+         (function.name() == Symbols::Plus().raw()) ||
+         (function.name() == Symbols::Minus().raw());
+}
+
+
 bool FlowGraphInliner::AlwaysInline(const Function& function) {
   const char* kAlwaysInlineAnnotation = "AlwaysInline";
   if (FLAG_enable_inlining_annotations &&
@@ -1828,7 +1838,8 @@ bool FlowGraphInliner::AlwaysInline(const Function& function) {
   }
 
   if (function.IsImplicitGetterFunction() || function.IsGetterFunction() ||
-      function.IsImplicitSetterFunction() || function.IsSetterFunction()) {
+      function.IsImplicitSetterFunction() || function.IsSetterFunction() ||
+      IsInlineableOperator(function)) {
     const intptr_t count = function.optimized_instruction_count();
     if ((count != 0) && (count < FLAG_inline_getters_setters_smaller_than)) {
       return true;

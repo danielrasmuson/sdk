@@ -70,6 +70,7 @@ namespace dart {
   V(Bigint_allocate, 4)                                                        \
   V(Developer_debugger, 2)                                                     \
   V(Developer_inspect, 1)                                                      \
+  V(Developer_log, 8)                                                          \
   V(Double_getIsNegative, 1)                                                   \
   V(Double_getIsInfinite, 1)                                                   \
   V(Double_getIsNaN, 1)                                                        \
@@ -298,8 +299,8 @@ namespace dart {
   V(Int32x4_setFlagZ, 2)                                                       \
   V(Int32x4_setFlagW, 2)                                                       \
   V(Int32x4_select, 3)                                                         \
-  V(Isolate_spawnFunction, 4)                                                  \
-  V(Isolate_spawnUri, 7)                                                       \
+  V(Isolate_spawnFunction, 7)                                                  \
+  V(Isolate_spawnUri, 10)                                                      \
   V(Isolate_getPortAndCapabilitiesOfCurrentIsolate, 0)                         \
   V(Isolate_sendOOB, 2)                                                        \
   V(Mirrors_evalInLibraryWithPrivateKey, 2)                                    \

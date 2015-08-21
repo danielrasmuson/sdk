@@ -276,8 +276,7 @@ void StubCode::GenerateCallStaticFunctionStub(Assembler* assembler) {
   // Remove the stub frame as we are about to jump to the dart function.
   __ LeaveFrame();
 
-  __ movl(ECX, FieldAddress(EAX, Code::instructions_offset()));
-  __ addl(ECX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(ECX, FieldAddress(EAX, Code::entry_point_offset()));
   __ jmp(ECX);
 }
 
@@ -296,8 +295,7 @@ void StubCode::GenerateFixCallersTargetStub(Assembler* assembler) {
   __ CallRuntime(kFixCallersTargetRuntimeEntry, 0);
   __ popl(EAX);  // Get Code object.
   __ popl(EDX);  // Restore arguments descriptor array.
-  __ movl(EAX, FieldAddress(EAX, Code::instructions_offset()));
-  __ addl(EAX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EAX, FieldAddress(EAX, Code::entry_point_offset()));
   __ LeaveFrame();
   __ jmp(EAX);
   __ int3();
@@ -313,31 +311,7 @@ void StubCode::GenerateFixAllocationStubTargetStub(Assembler* assembler) {
   __ pushl(raw_null);  // Setup space on stack for return value.
   __ CallRuntime(kFixAllocationStubTargetRuntimeEntry, 0);
   __ popl(EAX);  // Get Code object.
-  __ movl(EAX, FieldAddress(EAX, Code::instructions_offset()));
-  __ addl(EAX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
-  __ LeaveFrame();
-  __ jmp(EAX);
-  __ int3();
-}
-
-
-// Called from array allocate instruction when the allocation stub has been
-// disabled.
-// EDX: length (preserved).
-// ECX: element type (preserved).
-void StubCode::GenerateFixAllocateArrayStubTargetStub(Assembler* assembler) {
-  const Immediate& raw_null =
-      Immediate(reinterpret_cast<intptr_t>(Object::null()));
-  __ EnterStubFrame();
-  __ pushl(EDX);       // Preserve length.
-  __ pushl(ECX);       // Preserve element type.
-  __ pushl(raw_null);  // Setup space on stack for return value.
-  __ CallRuntime(kFixAllocationStubTargetRuntimeEntry, 0);
-  __ popl(EAX);  // Get Code object.
-  __ popl(ECX);  // Restore element type.
-  __ popl(EDX);  // Restore length.
-  __ movl(EAX, FieldAddress(EAX, Code::instructions_offset()));
-  __ addl(EAX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EAX, FieldAddress(EAX, Code::entry_point_offset()));
   __ LeaveFrame();
   __ jmp(EAX);
   __ int3();
@@ -349,15 +323,11 @@ void StubCode::GenerateFixAllocateArrayStubTargetStub(Assembler* assembler) {
 //   EBP[kParamEndSlotFromFp + 1]: last argument.
 // Uses EAX, EBX, ECX, EDX, EDI.
 static void PushArgumentsArray(Assembler* assembler) {
+  // Allocate array to store arguments of caller.
   const Immediate& raw_null =
       Immediate(reinterpret_cast<intptr_t>(Object::null()));
-  StubCode* stub_code = Isolate::Current()->stub_code();
-
-  // Allocate array to store arguments of caller.
   __ movl(ECX, raw_null);  // Null element type for raw Array.
-  const Code& array_stub = Code::Handle(stub_code->GetAllocateArrayStub());
-  const ExternalLabel array_label(array_stub.EntryPoint());
-  __ call(&array_label);
+  __ Call(*StubCode::AllocateArray_entry());
   __ SmiUntag(EDX);
   // EAX: newly allocated array.
   // EDX: length of the array (was preserved by the stub).
@@ -378,13 +348,6 @@ static void PushArgumentsArray(Assembler* assembler) {
   __ decl(EDX);
   __ j(POSITIVE, &loop, Assembler::kNearJump);
 }
-
-
-DECLARE_LEAF_RUNTIME_ENTRY(intptr_t, DeoptimizeCopyFrame,
-                           intptr_t deopt_reason,
-                           uword saved_registers_address);
-
-DECLARE_LEAF_RUNTIME_ENTRY(void, DeoptimizeFillFrame, uword last_fp);
 
 
 // Used by eager and lazy deoptimization. Preserve result in EAX if necessary.
@@ -495,7 +458,7 @@ void StubCode::GenerateDeoptimizeLazyStub(Assembler* assembler) {
   // Correct return address to point just after the call that is being
   // deoptimized.
   __ popl(EBX);
-  __ subl(EBX, Immediate(CallPattern::InstructionLength()));
+  __ subl(EBX, Immediate(CallPattern::pattern_length_in_bytes()));
   __ pushl(EBX);
   GenerateDeoptimizationSequence(assembler, true);  // Preserve EAX.
 }
@@ -570,8 +533,7 @@ void StubCode::GenerateMegamorphicMissStub(Assembler* assembler) {
     __ Bind(&call_target_function);
   }
 
-  __ movl(EBX, FieldAddress(EAX, Function::instructions_offset()));
-  __ addl(EBX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EBX, FieldAddress(EAX, Function::entry_point_offset()));
   __ jmp(EBX);
 }
 
@@ -582,23 +544,17 @@ void StubCode::GenerateMegamorphicMissStub(Assembler* assembler) {
 //   ECX : array element type (either NULL or an instantiated type).
 // Uses EAX, EBX, ECX, EDI  as temporary registers.
 // The newly allocated object is returned in EAX.
-void StubCode::GeneratePatchableAllocateArrayStub(Assembler* assembler,
-    uword* entry_patch_offset, uword* patch_code_pc_offset) {
-  *entry_patch_offset = assembler->CodeSize();
+void StubCode::GenerateAllocateArrayStub(Assembler* assembler) {
   Label slow_case;
   const Immediate& raw_null =
       Immediate(reinterpret_cast<intptr_t>(Object::null()));
-
-  Isolate* isolate = Isolate::Current();
-  const Class& cls = Class::Handle(isolate->object_store()->array_class());
-  ASSERT(!cls.IsNull());
   // Compute the size to be allocated, it is based on the array length
   // and is computed as:
   // RoundedAllocationSize((array_length * kwordSize) + sizeof(RawArray)).
   // Assert that length is a Smi.
   __ testl(EDX, Immediate(kSmiTagMask));
 
-  if (FLAG_use_slow_path || cls.trace_allocation()) {
+  if (FLAG_use_slow_path) {
     __ jmp(&slow_case);
   } else {
     __ j(NOT_ZERO, &slow_case);
@@ -612,48 +568,53 @@ void StubCode::GeneratePatchableAllocateArrayStub(Assembler* assembler,
   __ cmpl(EDX, max_len);
   __ j(GREATER, &slow_case);
 
+  __ MaybeTraceAllocation(kArrayCid,
+                          EAX,
+                          &slow_case,
+                          Assembler::kFarJump,
+                          /* inline_isolate = */ false);
+
   const intptr_t fixed_size = sizeof(RawArray) + kObjectAlignment - 1;
-  __ leal(EDI, Address(EDX, TIMES_2, fixed_size));  // EDX is Smi.
+  __ leal(EBX, Address(EDX, TIMES_2, fixed_size));  // EDX is Smi.
   ASSERT(kSmiTagShift == 1);
-  __ andl(EDI, Immediate(-kObjectAlignment));
+  __ andl(EBX, Immediate(-kObjectAlignment));
 
   // ECX: array element type.
   // EDX: array length as Smi.
-  // EDI: allocation size.
+  // EBX: allocation size.
 
-  Heap* heap = isolate->heap();
   const intptr_t cid = kArrayCid;
   Heap::Space space = Heap::SpaceForAllocation(cid);
-  __ movl(EAX, Address::Absolute(heap->TopAddress(space)));
-  __ movl(EBX, EAX);
-
-  // EDI: allocation size.
-  __ addl(EBX, EDI);
+  __ movl(EDI, Address(THR, Thread::heap_offset()));
+  __ movl(EAX, Address(EDI, Heap::TopOffset(space)));
+  __ addl(EBX, EAX);
   __ j(CARRY, &slow_case);
 
   // Check if the allocation fits into the remaining space.
   // EAX: potential new object start.
   // EBX: potential next object start.
-  // EDI: allocation size.
+  // EDI: heap.
   // ECX: array element type.
   // EDX: array length as Smi).
-  __ cmpl(EBX, Address::Absolute(heap->EndAddress(space)));
+  __ cmpl(EBX, Address(EDI, Heap::EndOffset(space)));
   __ j(ABOVE_EQUAL, &slow_case);
 
   // Successfully allocated the object(s), now update top to point to
   // next object start and initialize the object.
-  __ movl(Address::Absolute(heap->TopAddress(space)), EBX);
+  __ movl(Address(EDI, Heap::TopOffset(space)), EBX);
+  __ subl(EBX, EAX);
   __ addl(EAX, Immediate(kHeapObjectTag));
-  __ UpdateAllocationStatsWithSize(cid, EDI, kNoRegister, space);
+  __ UpdateAllocationStatsWithSize(cid, EBX, EDI, space,
+                                   /* inline_isolate = */ false);
 
   // Initialize the tags.
   // EAX: new object start as a tagged pointer.
-  // EBX: new object end address.
-  // EDI: allocation size.
+  // EBX: allocation size.
   // ECX: array element type.
   // EDX: array length as Smi.
   {
     Label size_tag_overflow, done;
+    __ movl(EDI, EBX);
     __ cmpl(EDI, Immediate(RawObject::SizeTag::kMaxSizeTag));
     __ j(ABOVE, &size_tag_overflow, Assembler::kNearJump);
     __ shll(EDI, Immediate(RawObject::kSizeTagPos - kObjectAlignmentLog2));
@@ -668,7 +629,7 @@ void StubCode::GeneratePatchableAllocateArrayStub(Assembler* assembler,
     __ movl(FieldAddress(EAX, Array::tags_offset()), EDI);  // Tags.
   }
   // EAX: new object start as a tagged pointer.
-  // EBX: new object end address.
+  // EBX: allocation size.
   // ECX: array element type.
   // EDX: Array length as Smi (preserved).
   // Store the type argument field.
@@ -683,11 +644,12 @@ void StubCode::GeneratePatchableAllocateArrayStub(Assembler* assembler,
 
   // Initialize all array elements to raw_null.
   // EAX: new object start as a tagged pointer.
-  // EBX: new object end address.
+  // EBX: allocation size.
   // EDI: iterator which initially points to the start of the variable
   // data area to be initialized.
   // ECX: array element type.
   // EDX: array length as Smi.
+  __ leal(EBX, FieldAddress(EAX, EBX, TIMES_1, 0));
   __ leal(EDI, FieldAddress(EAX, sizeof(RawArray)));
   Label done;
   Label init_loop;
@@ -716,11 +678,6 @@ void StubCode::GeneratePatchableAllocateArrayStub(Assembler* assembler,
   __ popl(EAX);  // Pop return value from return slot.
   __ LeaveFrame();
   __ ret();
-  // Emit function patching code. This will be swapped with the first 5 bytes
-  // at entry point.
-  *patch_code_pc_offset = assembler->CodeSize();
-  StubCode* stub_code = Isolate::Current()->stub_code();
-  __ jmp(&stub_code->FixAllocateArrayStubTargetLabel());
 }
 
 
@@ -847,12 +804,17 @@ void StubCode::GenerateAllocateContextStub(Assembler* assembler) {
     __ leal(EBX, Address(EDX, TIMES_4, fixed_size));
     __ andl(EBX, Immediate(-kObjectAlignment));
 
+    __ MaybeTraceAllocation(kContextCid,
+                            EAX,
+                            &slow_case,
+                            Assembler::kFarJump,
+                            /* inline_isolate = */ false);
+
     // Now allocate the object.
     // EDX: number of context variables.
     const intptr_t cid = kContextCid;
     Heap::Space space = Heap::SpaceForAllocation(cid);
-    __ LoadIsolate(ECX);
-    __ movl(ECX, Address(ECX, Isolate::heap_offset()));
+    __ movl(ECX, Address(THR, Thread::heap_offset()));
     __ movl(EAX, Address(ECX, Heap::TopOffset(space)));
     __ addl(EBX, EAX);
     // Check if the allocation fits into the remaining space.
@@ -877,9 +839,9 @@ void StubCode::GenerateAllocateContextStub(Assembler* assembler) {
     // EBX: next object start.
     // EDX: number of context variables.
     __ movl(Address(ECX, Heap::TopOffset(space)), EBX);
-    __ addl(EAX, Immediate(kHeapObjectTag));
     // EBX: Size of allocation in bytes.
     __ subl(EBX, EAX);
+    __ addl(EAX, Immediate(kHeapObjectTag));
     // Generate isolate-independent code to allow sharing between isolates.
     __ UpdateAllocationStatsWithSize(cid, EBX, EDI, space,
                                      /* inline_isolate = */ false);
@@ -962,7 +924,6 @@ void StubCode::GenerateAllocateContextStub(Assembler* assembler) {
   __ ret();
 }
 
-DECLARE_LEAF_RUNTIME_ENTRY(void, StoreBufferBlockProcess, Isolate* isolate);
 
 // Helper stub to implement Assembler::StoreIntoObject.
 // Input parameters:
@@ -1060,27 +1021,30 @@ void StubCode::GenerateAllocationStubForClass(
     __ movl(EDX, Address(ESP, kObjectTypeArgumentsOffset));
     // EDX: instantiated type arguments.
   }
+  Isolate* isolate = Isolate::Current();
   if (FLAG_inline_alloc && Heap::IsAllocatableInNewSpace(instance_size) &&
-      !cls.trace_allocation()) {
+      !cls.TraceAllocation(isolate)) {
     Label slow_case;
     // Allocate the object and update top to point to
     // next object start and initialize the allocated object.
     // EDX: instantiated type arguments (if is_cls_parameterized).
-    Heap* heap = Isolate::Current()->heap();
     Heap::Space space = Heap::SpaceForAllocation(cls.id());
-    __ movl(EAX, Address::Absolute(heap->TopAddress(space)));
+    __ movl(EDI, Address(THR, Thread::heap_offset()));
+    __ movl(EAX, Address(EDI, Heap::TopOffset(space)));
     __ leal(EBX, Address(EAX, instance_size));
     // Check if the allocation fits into the remaining space.
     // EAX: potential new object start.
     // EBX: potential next object start.
-    __ cmpl(EBX, Address::Absolute(heap->EndAddress(space)));
+    // EDI: heap.
+    __ cmpl(EBX, Address(EDI, Heap::EndOffset(space)));
     if (FLAG_use_slow_path) {
       __ jmp(&slow_case);
     } else {
       __ j(ABOVE_EQUAL, &slow_case);
     }
-    __ movl(Address::Absolute(heap->TopAddress(space)), EBX);
-    __ UpdateAllocationStats(cls.id(), ECX, space);
+    __ movl(Address(EDI, Heap::TopOffset(space)), EBX);
+    __ UpdateAllocationStats(cls.id(), ECX, space,
+                             /* inline_isolate = */ false);
 
     // EAX: new object start (untagged).
     // EBX: next object start.
@@ -1164,8 +1128,7 @@ void StubCode::GenerateAllocationStubForClass(
   // Emit function patching code. This will be swapped with the first 5 bytes
   // at entry point.
   *patch_code_pc_offset = assembler->CodeSize();
-  StubCode* stub_code = Isolate::Current()->stub_code();
-  __ jmp(&stub_code->FixAllocationStubTargetLabel());
+  __ Jmp(*StubCode::FixAllocationStubTarget_entry());
 }
 
 
@@ -1484,8 +1447,7 @@ void StubCode::GenerateNArgsCheckInlineCacheStub(
   __ Bind(&call_target_function);
   __ Comment("Call target");
   // EAX: Target function.
-  __ movl(EBX, FieldAddress(EAX, Function::instructions_offset()));
-  __ addl(EBX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EBX, FieldAddress(EAX, Function::entry_point_offset()));
   if (range_collection_mode == kCollectRanges) {
     __ EnterStubFrame();
     __ pushl(ECX);
@@ -1678,10 +1640,7 @@ void StubCode::GenerateZeroArgsUnoptimizedStaticCallStub(Assembler* assembler) {
 
   // Get function and call it, if possible.
   __ movl(EAX, Address(EBX, target_offset));
-  __ movl(EBX, FieldAddress(EAX, Function::instructions_offset()));
-
-  // EBX: Target instructions.
-  __ addl(EBX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EBX, FieldAddress(EAX, Function::entry_point_offset()));
   __ jmp(EBX);
 
   if (FLAG_support_debugger) {
@@ -1729,8 +1688,7 @@ void StubCode::GenerateLazyCompileStub(Assembler* assembler) {
   __ popl(EDX);  // Restore arguments descriptor array.
   __ LeaveFrame();
 
-  __ movl(EAX, FieldAddress(EAX, Function::instructions_offset()));
-  __ addl(EAX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EAX, FieldAddress(EAX, Function::entry_point_offset()));
   __ jmp(EAX);
 }
 
@@ -1948,18 +1906,11 @@ void StubCode::GenerateOptimizeFunctionStub(Assembler* assembler) {
   __ popl(EAX);  // Discard argument.
   __ popl(EAX);  // Get Code object
   __ popl(EDX);  // Restore argument descriptor.
-  __ movl(EAX, FieldAddress(EAX, Code::instructions_offset()));
-  __ addl(EAX, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(EAX, FieldAddress(EAX, Code::entry_point_offset()));
   __ LeaveFrame();
   __ jmp(EAX);
   __ int3();
 }
-
-
-DECLARE_LEAF_RUNTIME_ENTRY(intptr_t,
-                           BigintCompare,
-                           RawBigint* left,
-                           RawBigint* right);
 
 
 // Does identical check (object references are equal or not equal) with special
@@ -1967,11 +1918,10 @@ DECLARE_LEAF_RUNTIME_ENTRY(intptr_t,
 // Return ZF set.
 // Note: A Mint cannot contain a value that would fit in Smi, a Bigint
 // cannot contain a value that fits in Mint or Smi.
-void StubCode::GenerateIdenticalWithNumberCheckStub(Assembler* assembler,
-                                                    const Register left,
-                                                    const Register right,
-                                                    const Register temp,
-                                                    const Register unused) {
+static void GenerateIdenticalWithNumberCheckStub(Assembler* assembler,
+                                                 const Register left,
+                                                 const Register right,
+                                                 const Register temp) {
   Label reference_compare, done, check_mint, check_bigint;
   // If any of the arguments is Smi do reference compare.
   __ testl(left, Immediate(kSmiTagMask));
@@ -2113,10 +2063,7 @@ void StubCode::EmitMegamorphicLookup(
   // illegal class id was found, the target is a cache miss handler that can
   // be invoked as a normal Dart function.
   __ movl(EAX, FieldAddress(EDI, ECX, TIMES_4, base + kWordSize));
-  __ movl(target, FieldAddress(EAX, Function::instructions_offset()));
-  // TODO(srdjan): Evaluate performance impact of moving the instruction below
-  // to the call site, instead of having it here.
-  __ addl(target, Immediate(Instructions::HeaderSize() - kHeapObjectTag));
+  __ movl(target, FieldAddress(EAX, Function::entry_point_offset()));
 }
 
 

@@ -249,23 +249,6 @@ class Object {
     return AtomicOperations::CompareAndSwapWord(
         &raw()->ptr()->tags_, old_tags, new_tags);
   }
-  void set_tags(intptr_t value) const {
-    ASSERT(!IsNull());
-    // TODO(asiva): Remove the capability of setting tags in general. The mask
-    // here only allows for canonical and from_snapshot flags to be set.
-    value = value & 0x0000000c;
-    uword tags = raw()->ptr()->tags_;
-    uword old_tags;
-    do {
-      old_tags = tags;
-      uword new_tags = (old_tags & ~0x0000000c) | value;
-      tags = CompareAndSwapTags(old_tags, new_tags);
-    } while (tags != old_tags);
-  }
-  void SetCreatedFromSnapshot() const {
-    ASSERT(!IsNull());
-    raw()->SetCreatedFromSnapshot();
-  }
   bool IsCanonical() const {
     ASSERT(!IsNull());
     return raw()->IsCanonical();
@@ -273,6 +256,10 @@ class Object {
   void SetCanonical() const {
     ASSERT(!IsNull());
     raw()->SetCanonical();
+  }
+  void ClearCanonical() const {
+    ASSERT(!IsNull());
+    raw()->ClearCanonical();
   }
   intptr_t GetClassId() const {
     return !raw()->IsHeapObject() ?
@@ -351,7 +338,7 @@ class Object {
   }
 
   static Object& Handle() {
-    return Handle(Isolate::Current(), null_);
+    return Handle(Thread::Current()->zone(), null_);
   }
 
   static Object& Handle(Zone* zone) {
@@ -363,7 +350,7 @@ class Object {
   }
 
   static Object& Handle(RawObject* raw_ptr) {
-    return Handle(Isolate::Current(), raw_ptr);
+    return Handle(Thread::Current()->zone(), raw_ptr);
   }
 
   static Object& ZoneHandle(Zone* zone, RawObject* raw_ptr) {
@@ -684,7 +671,7 @@ class Object {
     ASSERT(Contains(reinterpret_cast<uword>(addr) - 1) &&
            Contains(reinterpret_cast<uword>(addr) - kWordSize));
     // At least check that there is a NoSafepointScope and hope it's big enough.
-    ASSERT(Isolate::Current()->no_safepoint_scope_depth() > 0);
+    ASSERT(Thread::Current()->no_safepoint_scope_depth() > 0);
     return const_cast<FieldType*>(addr);
   }
 
@@ -724,7 +711,10 @@ class Object {
     return -kWordSize;
   }
 
-  static void InitializeObject(uword address, intptr_t id, intptr_t size);
+  static void InitializeObject(uword address,
+                               intptr_t id,
+                               intptr_t size,
+                               bool is_vm_object);
 
   static void RegisterClass(const Class& cls,
                             const String& name,
@@ -941,6 +931,7 @@ class Class : public Object {
   RawString* Name() const;
   RawString* PrettyName() const;
   RawString* UserVisibleName() const;
+  bool IsInFullSnapshot() const;
 
   virtual RawString* DictionaryName() const { return Name(); }
 
@@ -1111,6 +1102,10 @@ class Class : public Object {
   static bool IsSignatureClass(RawClass* cls) {
     return cls->ptr()->signature_function_ != Object::null();
   }
+  static bool IsInFullSnapshot(RawClass* cls) {
+    NoSafepointScope no_safepoint;
+    return cls->ptr()->library_->ptr()->is_in_fullsnapshot_;
+  }
 
   // Check if this class represents a canonical signature class, i.e. not an
   // alias as defined in a typedef.
@@ -1278,6 +1273,11 @@ class Class : public Object {
   }
   void set_is_cycle_free() const;
 
+  bool is_allocated() const {
+    return IsAllocatedBit::decode(raw_ptr()->state_bits_);
+  }
+  void set_is_allocated() const;
+
   uint16_t num_native_fields() const {
     return raw_ptr()->num_native_fields_;
   }
@@ -1366,9 +1366,7 @@ class Class : public Object {
   RawArray* cha_codes() const { return raw_ptr()->cha_codes_; }
   void set_cha_codes(const Array& value) const;
 
-  bool trace_allocation() const {
-    return TraceAllocationBit::decode(raw_ptr()->state_bits_);
-  }
+  bool TraceAllocation(Isolate* isolate) const;
   void SetTraceAllocation(bool trace_allocation) const;
 
  private:
@@ -1394,7 +1392,7 @@ class Class : public Object {
     kFieldsMarkedNullableBit = 11,
     kCycleFreeBit = 12,
     kEnumBit = 13,
-    kTraceAllocationBit = 14,
+    kIsAllocatedBit = 15,
   };
   class ConstBit : public BitField<bool, kConstBit, 1> {};
   class ImplementedBit : public BitField<bool, kImplementedBit, 1> {};
@@ -1411,7 +1409,7 @@ class Class : public Object {
       kFieldsMarkedNullableBit, 1> {};  // NOLINT
   class CycleFreeBit : public BitField<bool, kCycleFreeBit, 1> {};
   class EnumBit : public BitField<bool, kEnumBit, 1> {};
-  class TraceAllocationBit : public BitField<bool, kTraceAllocationBit, 1> {};
+  class IsAllocatedBit : public BitField<bool, kIsAllocatedBit, 1> {};
 
   void set_name(const String& value) const;
   void set_pretty_name(const String& value) const;
@@ -2004,6 +2002,8 @@ class ICData : public Object {
                         bool is_static_call) const;
 
  private:
+  static RawICData* New();
+
   RawArray* ic_data() const {
     return raw_ptr()->ic_data_;
   }
@@ -2106,13 +2106,10 @@ class Function : public Object {
   RawClass* origin() const;
   RawScript* script() const;
 
-  void set_regexp(const JSRegExp& value) const;
   RawJSRegExp* regexp() const;
-
-  // Get and set the class id this function is specialized for. Only set for
-  // irregexp functions.
-  intptr_t regexp_cid() const { return raw_ptr()->regexp_cid_; }
-  void set_regexp_cid(intptr_t regexp_cid) const;
+  intptr_t string_specialization_cid() const;
+  void SetRegExpData(const JSRegExp& regexp,
+                     intptr_t string_specialization_cid) const;
 
   RawAbstractType* result_type() const { return raw_ptr()->result_type_; }
   void set_result_type(const AbstractType& value) const;
@@ -2147,8 +2144,8 @@ class Function : public Object {
   void set_unoptimized_code(const Code& value) const;
   bool HasCode() const;
 
-  static intptr_t instructions_offset() {
-    return OFFSET_OF(RawFunction, instructions_);
+  static intptr_t entry_point_offset() {
+    return OFFSET_OF(RawFunction, entry_point_);
   }
 
   // Returns true if there is at least one debugger breakpoint
@@ -2481,6 +2478,8 @@ class Function : public Object {
     return !is_static() && IsImplicitClosureFunction();
   }
 
+  bool IsConstructorClosureFunction() const;
+
   // Returns true if this function represents a local function.
   bool IsLocalFunction() const {
     return parent_function() != Function::null();
@@ -2801,8 +2800,14 @@ class Field : public Object {
   bool is_static() const { return StaticBit::decode(raw_ptr()->kind_bits_); }
   bool is_final() const { return FinalBit::decode(raw_ptr()->kind_bits_); }
   bool is_const() const { return ConstBit::decode(raw_ptr()->kind_bits_); }
-  bool is_synthetic() const {
-    return SyntheticBit::decode(raw_ptr()->kind_bits_);
+  bool is_reflectable() const {
+    return ReflectableBit::decode(raw_ptr()->kind_bits_);
+  }
+  bool is_double_initialized() const {
+    return DoubleInitializedBit::decode(raw_ptr()->kind_bits_);
+  }
+  void set_is_double_initialized(bool value) const {
+    set_kind_bits(DoubleInitializedBit::update(value, raw_ptr()->kind_bits_));
   }
 
   inline intptr_t Offset() const;
@@ -2825,7 +2830,7 @@ class Field : public Object {
                        bool is_static,
                        bool is_final,
                        bool is_const,
-                       bool is_synthetic,
+                       bool is_reflectable,
                        const Class& owner,
                        intptr_t token_pos);
 
@@ -2944,6 +2949,17 @@ class Field : public Object {
 
   void EvaluateInitializer() const;
 
+  RawFunction* initializer() const {
+    return raw_ptr()->initializer_;
+  }
+  void set_initializer(const Function& initializer) const;
+
+  // For static fields only. Constructs a closure that gets/sets the
+  // field value.
+  RawInstance* GetterClosure() const;
+  RawInstance* SetterClosure() const;
+  RawInstance* AccessorClosure(bool make_setter) const;
+
   // Constructs getter and setter names for fields and vice versa.
   static RawString* GetterName(const String& field_name);
   static RawString* GetterSymbol(const String& field_name);
@@ -2963,16 +2979,18 @@ class Field : public Object {
     kFinalBit,
     kHasInitializerBit,
     kUnboxingCandidateBit,
-    kSyntheticBit
+    kReflectableBit,
+    kDoubleInitializedBit,
   };
   class ConstBit : public BitField<bool, kConstBit, 1> {};
   class StaticBit : public BitField<bool, kStaticBit, 1> {};
   class FinalBit : public BitField<bool, kFinalBit, 1> {};
   class HasInitializerBit : public BitField<bool, kHasInitializerBit, 1> {};
   class UnboxingCandidateBit : public BitField<bool,
-                                               kUnboxingCandidateBit, 1> {
-  };
-  class SyntheticBit : public BitField<bool, kSyntheticBit, 1> {};
+                                               kUnboxingCandidateBit, 1> {};
+  class ReflectableBit : public BitField<bool, kReflectableBit, 1> {};
+  class DoubleInitializedBit : public BitField<bool,
+                                               kDoubleInitializedBit, 1> {};
 
   // Update guarded cid and guarded length for this field. Returns true, if
   // deoptimization of dependent code is required.
@@ -2988,8 +3006,8 @@ class Field : public Object {
   void set_is_const(bool value) const {
     set_kind_bits(ConstBit::update(value, raw_ptr()->kind_bits_));
   }
-  void set_is_synthetic(bool value) const {
-    set_kind_bits(SyntheticBit::update(value, raw_ptr()->kind_bits_));
+  void set_is_reflectable(bool value) const {
+    set_kind_bits(ReflectableBit::update(value, raw_ptr()->kind_bits_));
   }
   void set_owner(const Object& value) const {
     StorePointer(&raw_ptr()->owner_, value.raw());
@@ -3360,6 +3378,11 @@ class Library : public Object {
                     native_symbol_resolver);
   }
 
+  bool is_in_fullsnapshot() const { return raw_ptr()->is_in_fullsnapshot_; }
+  void set_is_in_fullsnapshot(bool value) const {
+    StoreNonPointer(&raw_ptr()->is_in_fullsnapshot_, value);
+  }
+
   RawError* Patch(const Script& script) const;
 
   RawString* PrivateName(const String& name) const;
@@ -3527,6 +3550,7 @@ class ObjectPool : public Object {
   enum EntryType {
     kTaggedObject,
     kImmediate,
+    kExternalLabel,
   };
 
   struct Entry {
@@ -3563,7 +3587,6 @@ class ObjectPool : public Object {
   }
 
   EntryType InfoAt(intptr_t index) const;
-  void SetInfoAt(intptr_t index, EntryType info) const;
 
   RawObject* ObjectAt(intptr_t index) const {
     ASSERT(InfoAt(index) == kTaggedObject);
@@ -3602,8 +3625,15 @@ class ObjectPool : public Object {
 
   static RawObjectPool* New(intptr_t len);
 
+  // Returns the pool index from the offset relative to a tagged RawObjectPool*,
+  // adjusting for the tag-bit.
   static intptr_t IndexFromOffset(intptr_t offset) {
+    ASSERT(Utils::IsAligned(offset + kHeapObjectTag, kWordSize));
     return (offset + kHeapObjectTag - data_offset()) / kBytesPerElement;
+  }
+
+  static intptr_t OffsetFromIndex(intptr_t index) {
+    return element_offset(index) - kHeapObjectTag;
   }
 
   void DebugPrint() const;
@@ -4008,9 +4038,11 @@ class DeoptInfo : public AllStatic {
 class Code : public Object {
  public:
   RawInstructions* instructions() const { return raw_ptr()->instructions_; }
-  static intptr_t instructions_offset() {
-    return OFFSET_OF(RawCode, instructions_);
+
+  static intptr_t entry_point_offset() {
+    return OFFSET_OF(RawCode, entry_point_);
   }
+
   intptr_t pointer_offsets_length() const {
     return PtrOffBits::decode(raw_ptr()->state_bits_);
   }
@@ -4025,8 +4057,9 @@ class Code : public Object {
   void set_is_alive(bool value) const;
 
   uword EntryPoint() const {
-    const Instructions& instr = Instructions::Handle(instructions());
-    return instr.EntryPoint();
+    ASSERT(raw_ptr()->entry_point_ ==
+           Instructions::Handle(instructions()).EntryPoint());
+    return raw_ptr()->entry_point_;
   }
   intptr_t Size() const {
     const Instructions& instr = Instructions::Handle(instructions());
@@ -4136,8 +4169,7 @@ class Code : public Object {
   enum InlinedIntervalEntries {
     kInlIntStart = 0,
     kInlIntInliningId = 1,
-    kInlIntCallerId = 2,
-    kInlIntNumEntries = 3,
+    kInlIntNumEntries = 2,
   };
 
   RawArray* GetInlinedIntervals() const;
@@ -4145,6 +4177,9 @@ class Code : public Object {
 
   RawArray* GetInlinedIdToFunction() const;
   void SetInlinedIdToFunction(const Array& value) const;
+
+  RawArray* GetInlinedCallerIdMap() const;
+  void SetInlinedCallerIdMap(const Array& value) const;
 
   void GetInlinedFunctionsAt(
       intptr_t offset, GrowableArray<Function*>* fs) const;
@@ -4315,6 +4350,9 @@ class Code : public Object {
     // RawInstructions are never allocated in New space and hence a
     // store buffer update is not needed here.
     StorePointer(&raw_ptr()->instructions_, instructions);
+    uword entry_point = reinterpret_cast<uword>(instructions->ptr()) +
+        Instructions::HeaderSize();
+    StoreNonPointer(&raw_ptr()->entry_point_, entry_point);
   }
 
   void set_pointer_offsets_length(intptr_t value) {
@@ -4347,6 +4385,7 @@ class Code : public Object {
 
   FINAL_HEAP_OBJECT_IMPLEMENTATION(Code, Object);
   friend class Class;
+  friend class SnapshotWriter;
 
   // So that the RawFunction pointer visitor can determine whether code the
   // function points to is optimized.

@@ -10,14 +10,20 @@ import 'dart:collection';
 
 import 'package:compiler/compiler.dart' as api;
 import 'package:compiler/src/constants/expressions.dart';
+import 'package:compiler/src/diagnostics/messages.dart';
+import 'package:compiler/src/diagnostics/source_span.dart';
+import 'package:compiler/src/diagnostics/spannable.dart';
 import 'package:compiler/src/elements/elements.dart';
 import 'package:compiler/src/js_backend/js_backend.dart'
     show JavaScriptBackend;
-import 'package:compiler/src/resolution/resolution.dart';
 import 'package:compiler/src/io/source_file.dart';
+import 'package:compiler/src/resolution/members.dart';
+import 'package:compiler/src/resolution/registry.dart';
+import 'package:compiler/src/resolution/scope.dart';
+import 'package:compiler/src/resolution/tree_elements.dart';
+import 'package:compiler/src/script.dart';
 import 'package:compiler/src/tree/tree.dart';
 import 'package:compiler/src/old_to_new_api.dart';
-import 'package:compiler/src/util/util.dart';
 import 'parser_helper.dart';
 
 import 'package:compiler/src/elements/modelx.dart'
@@ -26,8 +32,7 @@ import 'package:compiler/src/elements/modelx.dart'
          ErroneousElementX,
          FunctionElementX;
 
-import 'package:compiler/src/dart2jslib.dart'
-    hide TreeElementMapping;
+import 'package:compiler/src/compiler.dart';
 
 import 'package:compiler/src/deferred_load.dart'
     show DeferredLoadTask,
@@ -40,7 +45,7 @@ class WarningMessage {
   Message message;
   WarningMessage(this.node, this.message);
 
-  toString() => message.toString();
+  toString() => message.kind.toString();
 }
 
 final Uri PATCH_CORE = new Uri(scheme: 'patch', path: 'core');
@@ -115,8 +120,14 @@ class MockCompiler extends Compiler {
                    buildLibrarySource(DEFAULT_ISOLATE_HELPER_LIBRARY));
     registerSource(Compiler.DART_MIRRORS,
                    buildLibrarySource(DEFAULT_MIRRORS_LIBRARY));
+
+    Map<String, String> asyncLibrarySource = <String, String>{};
+    asyncLibrarySource.addAll(DEFAULT_ASYNC_LIBRARY);
+    if (enableAsyncAwait) {
+      asyncLibrarySource.addAll(ASYNC_AWAIT_LIBRARY);
+    }
     registerSource(Compiler.DART_ASYNC,
-                   buildLibrarySource(DEFAULT_ASYNC_LIBRARY));
+                   buildLibrarySource(asyncLibrarySource));
   }
 
   String get patchVersion {
@@ -166,8 +177,9 @@ class MockCompiler extends Compiler {
   // warnings.
   void reportWarning(Spannable node, MessageKind messageKind,
                      [Map arguments = const {}]) {
+    MessageTemplate template = MessageTemplate.TEMPLATES[messageKind];
     reportDiagnostic(node,
-                     messageKind.message(arguments, terseDiagnostics),
+                     template.message(arguments, terseDiagnostics),
                      api.Diagnostic.WARNING);
   }
 
@@ -215,7 +227,7 @@ class MockCompiler extends Compiler {
                                           ExecutableElement element) {
     ResolverVisitor visitor =
         new ResolverVisitor(this, element,
-            new ResolutionRegistry.internal(this,
+            new ResolutionRegistry(this,
                 new CollectingTreeElements(element)));
     if (visitor.scope is LibraryScope) {
       visitor.scope = new MethodScope(visitor.scope, element);
@@ -229,7 +241,7 @@ class MockCompiler extends Compiler {
     Element mockElement = new MockElement(mainApp.entryCompilationUnit);
     ResolverVisitor visitor =
         new ResolverVisitor(this, mockElement,
-          new ResolutionRegistry.internal(this,
+          new ResolutionRegistry(this,
               new CollectingTreeElements(mockElement)));
     visitor.scope = new MethodScope(visitor.scope, mockElement);
     return visitor;

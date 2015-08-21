@@ -8,8 +8,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:compiler/compiler.dart' as api;
 import 'package:compiler/src/apiimpl.dart';
-import 'package:compiler/src/dart2jslib.dart'
-    hide Compiler;
+import 'package:compiler/src/diagnostics/messages.dart' show
+    Message;
 import 'package:compiler/src/filenames.dart';
 import 'package:compiler/src/source_file_provider.dart';
 import 'package:compiler/src/util/uri_extras.dart';
@@ -96,10 +96,10 @@ class CollectingDiagnosticHandler extends FormattingDiagnosticHandler {
   }
 
   @override
-  void report(Uri uri, int begin, int end, String message,
+  void report(Message message, Uri uri, int begin, int end, String text,
               api.Diagnostic kind) {
     if (kind == api.Diagnostic.WARNING) {
-      if (checkWhiteList(uri, message)) {
+      if (checkWhiteList(uri, text)) {
         // Suppress whitelisted warnings.
         lastWasWhitelisted = true;
         return;
@@ -107,7 +107,7 @@ class CollectingDiagnosticHandler extends FormattingDiagnosticHandler {
       hasWarnings = true;
     }
     if (kind == api.Diagnostic.HINT) {
-      if (checkWhiteList(uri, message)) {
+      if (checkWhiteList(uri, text)) {
         // Suppress whitelisted hints.
         lastWasWhitelisted = true;
         return;
@@ -115,7 +115,7 @@ class CollectingDiagnosticHandler extends FormattingDiagnosticHandler {
       hasHint = true;
     }
     if (kind == api.Diagnostic.ERROR) {
-      if (checkWhiteList(uri, message)) {
+      if (checkWhiteList(uri, text)) {
         // Suppress whitelisted errors.
         lastWasWhitelisted = true;
         return;
@@ -126,7 +126,7 @@ class CollectingDiagnosticHandler extends FormattingDiagnosticHandler {
       return;
     }
     lastWasWhitelisted = false;
-    super.report(uri, begin, end, message, kind);
+    super.report(message, uri, begin, end, text, kind);
   }
 }
 

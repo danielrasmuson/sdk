@@ -109,7 +109,17 @@ class CpsFragment {
 
   /// Invoke a built-in operator.
   Primitive applyBuiltin(BuiltinOperator op, List<Primitive> args) {
-    return letPrim(new ApplyBuiltinOperator(op, args));
+    return letPrim(new ApplyBuiltinOperator(op, args, sourceInformation));
+  }
+
+  Primitive invokeBuiltin(BuiltinMethod method, 
+                          Primitive receiver, 
+                          List<Primitive> arguments,
+                          {bool receiverIsNotNull: false}) {
+    ApplyBuiltinMethod apply = 
+        new ApplyBuiltinMethod(method, receiver, arguments, sourceInformation);
+    apply.receiverIsNotNull = receiverIsNotNull;
+    return letPrim(apply);
   }
 
   /// Inserts an invocation. binds its continuation, and returns the
@@ -258,10 +268,10 @@ class CpsFragment {
   }
 
   /// Puts the given fragment into this one.
-  /// 
+  ///
   /// If [other] was an open fragment, its hole becomes the new hole
   /// in this fragment.
-  /// 
+  ///
   /// [other] is reset to an empty fragment after this.
   void append(CpsFragment other) {
     if (other.root == null) return;
@@ -273,14 +283,12 @@ class CpsFragment {
 
   /// Reads the value of the given mutable variable.
   Primitive getMutable(MutableVariable variable) {
-    return letPrim(new GetMutableVariable(variable));
+    return letPrim(new GetMutable(variable));
   }
 
   /// Sets the value of the given mutable variable.
   void setMutable(MutableVariable variable, Primitive value) {
-    SetMutableVariable setter = new SetMutableVariable(variable, value);
-    put(setter);
-    context = setter;
+    letPrim(new SetMutable(variable, value));
   }
 
   /// Declare a new mutable variable.

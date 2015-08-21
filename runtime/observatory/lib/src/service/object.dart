@@ -365,6 +365,19 @@ abstract class HeapObject extends ServiceObject {
   @observable int retainedSize;
 
   HeapObject._empty(ServiceObjectOwner owner) : super._empty(owner);
+
+  void _update(ObservableMap map, bool mapIsRef) {
+    if (map['class'] != null) {
+      // Sent with refs for some types. Load it if available, but don't clobber
+      // it with null for kinds that only send if for full responses.
+      clazz = map['class'];
+    }
+
+    if (mapIsRef) {
+      return;
+    }
+    size = map['size'];
+  }
 }
 
 abstract class Coverage {
@@ -506,7 +519,8 @@ abstract class VM extends ServiceObjectOwner {
   final ObservableMap<String,Isolate> _isolateCache =
       new ObservableMap<String,Isolate>();
 
-  @reflectable Iterable<Isolate> get isolates => _isolateCache.values;
+  // The list of live isolates, ordered by isolate start time.
+  final ObservableList<Isolate> isolates = new ObservableList<Isolate>();
 
   @observable String version = 'unknown';
   @observable String targetCPU;
@@ -547,7 +561,8 @@ abstract class VM extends ServiceObjectOwner {
       var isolate = getFromMap(map['isolate']);
       event = new ServiceObject._fromMap(isolate, map);
       if (event.kind == ServiceEvent.kIsolateExit) {
-        _removeIsolate(isolate.id);
+        _isolateCache.remove(isolate.id);
+        _buildIsolateList();
       }
     }
     var eventStream = _eventStreams[streamId];
@@ -558,10 +573,27 @@ abstract class VM extends ServiceObjectOwner {
     }
   }
 
-  void _removeIsolate(String isolateId) {
-    assert(_isolateCache.containsKey(isolateId));
-    _isolateCache.remove(isolateId);
-    notifyPropertyChange(#isolates, true, false);
+  int _compareIsolates(Isolate a, Isolate b) {
+    var aStart = a.startTime;
+    var bStart = b.startTime;
+    if (aStart == null) {
+      if (bStart == null) {
+        return 0;
+      } else {
+        return 1;
+      }
+    }
+    if (bStart == null) {
+      return -1;
+    }
+    return aStart.compareTo(bStart);
+  }
+
+  void _buildIsolateList() {
+    var isolateList = _isolateCache.values.toList();
+    isolateList.sort(_compareIsolates);
+    isolates.clear();
+    isolates.addAll(isolateList);
   }
 
   void _removeDeadIsolates(List newIsolates) {
@@ -576,8 +608,8 @@ abstract class VM extends ServiceObjectOwner {
         toRemove.add(id);
       }
     });
-    toRemove.forEach((id) => _removeIsolate(id));
-    notifyPropertyChange(#isolates, true, false);
+    toRemove.forEach((id) => _isolateCache.remove(id));
+    _buildIsolateList();
   }
 
   static final String _isolateIdPrefix = 'isolates/';
@@ -598,7 +630,7 @@ abstract class VM extends ServiceObjectOwner {
       // Add new isolate to the cache.
       isolate = new ServiceObject._fromMap(this, map);
       _isolateCache[id] = isolate;
-      notifyPropertyChange(#isolates, true, false);
+      _buildIsolateList();
 
       // Eagerly load the isolate.
       isolate.load().catchError((e, stack) {
@@ -940,10 +972,10 @@ class HeapSnapshot {
                                                  limit: limit)) {
       result.add(isolate.getObjectByAddress(v.address)
                         .then((ServiceObject obj) {
-        if (obj is Instance) {
-          // TODO(rmacnak): size/retainedSize are properties of all heap
-          // objects, not just Instances.
+        if (obj is HeapObject) {
           obj.retainedSize = v.retainedSize;
+        } else {
+          print("${obj.runtimeType} should be a HeapObject");
         }
         return obj;
       }));
@@ -954,6 +986,7 @@ class HeapSnapshot {
 
 /// State for a running isolate.
 class Isolate extends ServiceObjectOwner with Coverage {
+  static const kLoggingStream = '_Logging';
   @reflectable VM get vm => owner;
   @reflectable Isolate get isolate => this;
   @observable int number;
@@ -1094,11 +1127,15 @@ class Isolate extends ServiceObjectOwner with Coverage {
     });
   }
 
-  Future<ServiceObject> getObject(String objectId) {
+  Future<ServiceObject> getObject(String objectId, {bool reload: true}) {
     assert(objectId != null && objectId != '');
     var obj = _cache[objectId];
     if (obj != null) {
-      return obj.reload();
+      if (reload) {
+        return obj.reload();
+      }
+      // Returned cached object.
+      return new Future.value(obj);
     }
     Map params = {
       'objectId': objectId,
@@ -1200,6 +1237,7 @@ class Isolate extends ServiceObjectOwner with Coverage {
     if (map['entry'] != null) {
       entry = map['entry'];
     }
+    var savedStartTime = startTime;
     var startTimeInMillis = map['startTime'];
     startTime = new DateTime.fromMillisecondsSinceEpoch(startTimeInMillis);
     notifyPropertyChange(#upTime, 0, 1);
@@ -1249,6 +1287,9 @@ class Isolate extends ServiceObjectOwner with Coverage {
     libraries.clear();
     libraries.addAll(map['libraries']);
     libraries.sort(ServiceObject.LexicalSortName);
+    if (savedStartTime == null) {
+      vm._buildIsolateList();
+    }
   }
 
   Future<TagProfile> updateTagProfile() {
@@ -1396,6 +1437,67 @@ class Isolate extends ServiceObjectOwner with Coverage {
     return invokeRpc('resume', {'step': 'Out'});
   }
 
+
+  static const int kFirstResume = 0;
+  static const int kSecondResume = 1;
+  /// result[kFirstResume] completes after the inital resume. The UI should
+  /// wait on this future because some other breakpoint may be hit before the
+  /// async continuation.
+  /// result[kSecondResume] completes after the second resume. Tests should
+  /// wait on this future to avoid confusing the pause event at the
+  /// state-machine switch with the pause event after the state-machine switch.
+  List<Future> asyncStepOver() {
+    Completer firstResume = new Completer();
+    Completer secondResume = new Completer();
+    var subscription;
+
+    handleError(error) {
+      if (subscription != null) {
+        subscription.cancel();
+        subscription = null;
+      }
+      firstResume.completeError(error);
+      secondResume.completeError(error);
+    }
+
+    if ((pauseEvent == null) ||
+        (pauseEvent.kind != ServiceEvent.kPauseBreakpoint) ||
+        (pauseEvent.asyncContinuation == null)) {
+      handleError(new Exception("No async continuation available"));
+    } else {
+      Instance continuation = pauseEvent.asyncContinuation;
+      assert(continuation.isClosure);
+      addBreakOnActivation(continuation).then((Breakpoint continuationBpt) {
+        vm.getEventStream(VM.kDebugStream).then((stream) {
+          var onResume = firstResume;
+          subscription = stream.listen((ServiceEvent event) {
+            if ((event.kind == ServiceEvent.kPauseBreakpoint) &&
+                (event.breakpoint == continuationBpt)) {
+              // We are stopped before state-machine dispatch; step-over to
+              // reach user code.
+              removeBreakpoint(continuationBpt).then((_) {
+                onResume = secondResume;
+                stepOver().catchError(handleError);
+              });
+            } else if (event.kind == ServiceEvent.kResume) {
+              if (onResume == secondResume) {
+                subscription.cancel();
+                subscription = null;
+              }
+              if (onResume != null) {
+                onResume.complete(this);
+                onResume = null;
+              }
+            }
+          });
+          resume().catchError(handleError);
+        }).catchError(handleError);
+      }).catchError(handleError);
+    }
+
+    return [firstResume.future, secondResume.future];
+  }
+
   Future setName(String newName) {
     return invokeRpc('setName', {'name': newName});
   }
@@ -1506,7 +1608,7 @@ class Isolate extends ServiceObjectOwner with Coverage {
     return Future.wait([refreshDartMetrics(), refreshNativeMetrics()]);
   }
 
-  String toString() => "Isolate($_id)";
+  String toString() => "Isolate($name)";
 }
 
 /// A [ServiceObject] which implements [ObservableMap].
@@ -1535,7 +1637,7 @@ class ServiceMap extends ServiceObject implements ObservableMap {
     _map.addAll(map);
 
     name = _map['name'];
-    vmName = (_map.containsKey('vmName') ? _map['vmName'] : name);
+    vmName = (_map.containsKey('_vmName') ? _map['_vmName'] : name);
   }
 
   // TODO(turnidge): These are temporary until we have a proper root
@@ -1591,6 +1693,15 @@ class DartError extends ServiceObject {
   String toString() => 'DartError($message)';
 }
 
+Level _findLogLevel(int value) {
+  for (var level in Level.LEVELS) {
+    if (level.value == value) {
+      return level;
+    }
+  }
+  return new Level('$value', value);
+}
+
 /// A [ServiceEvent] is an asynchronous event notification from the vm.
 class ServiceEvent extends ServiceObject {
   /// The possible 'kind' values.
@@ -1611,6 +1722,7 @@ class ServiceEvent extends ServiceObject {
   static const kInspect                = 'Inspect';
   static const kDebuggerSettingsUpdate = '_DebuggerSettingsUpdate';
   static const kConnectionClosed       = 'ConnectionClosed';
+  static const kLogging                = '_Logging';
 
   ServiceEvent._empty(ServiceObjectOwner owner) : super._empty(owner);
 
@@ -1623,12 +1735,14 @@ class ServiceEvent extends ServiceObject {
   @observable Frame topFrame;
   @observable Instance exception;
   @observable Instance asyncContinuation;
+  @observable bool atAsyncJump;
   @observable ServiceObject inspectee;
   @observable ByteData data;
   @observable int count;
   @observable String reason;
   @observable String exceptions;
   @observable String bytesAsString;
+  @observable Map logRecord;
   int chunkIndex, chunkCount, nodeCount;
 
   @observable bool get isPauseEvent {
@@ -1664,6 +1778,9 @@ class ServiceEvent extends ServiceObject {
     }
     if (map['_asyncContinuation'] != null) {
       asyncContinuation = map['_asyncContinuation'];
+      atAsyncJump = map['_atAsyncJump'];
+    } else {
+      atAsyncJump = false;
     }
     if (map['inspectee'] != null) {
       inspectee = map['inspectee'];
@@ -1690,6 +1807,12 @@ class ServiceEvent extends ServiceObject {
     if (map['bytes'] != null) {
       var bytes = decodeBase64(map['bytes']);
       bytesAsString = UTF8.decode(bytes);
+    }
+    if (map['logRecord'] != null) {
+      logRecord = map['logRecord'];
+      logRecord['time'] =
+          new DateTime.fromMillisecondsSinceEpoch(logRecord['time'].toInt());
+      logRecord['level'] = _findLogLevel(logRecord['level']);
     }
   }
 
@@ -1799,7 +1922,7 @@ class LibraryDependency {
 }
 
 
-class Library extends ServiceObject with Coverage {
+class Library extends HeapObject with Coverage {
   @observable String uri;
   @reflectable final dependencies = new ObservableList<LibraryDependency>();
   @reflectable final scripts = new ObservableList<Script>();
@@ -1813,6 +1936,9 @@ class Library extends ServiceObject with Coverage {
   Library._empty(ServiceObjectOwner owner) : super._empty(owner);
 
   void _update(ObservableMap map, bool mapIsRef) {
+    _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
     uri = map['uri'];
     var shortUri = uri;
     if (uri.startsWith('file://') ||
@@ -1824,12 +1950,11 @@ class Library extends ServiceObject with Coverage {
       // When there is no name for a library, use the shortUri.
       name = shortUri;
     }
-    vmName = (map.containsKey('vmName') ? map['vmName'] : name);
+    vmName = (map.containsKey('_vmName') ? map['_vmName'] : name);
     if (mapIsRef) {
       return;
     }
     _loaded = true;
-    _upgradeCollection(map, isolate);
     dependencies.clear();
     dependencies.addAll(map["dependencies"].map(LibraryDependency._fromMap));
     scripts.clear();
@@ -1847,6 +1972,13 @@ class Library extends ServiceObject with Coverage {
 
   Future<ServiceObject> evaluate(String expression) {
     return isolate._eval(this, expression);
+  }
+
+  Script get rootScript {
+    for (Script script in scripts) {
+      if (script.uri == uri) return script;
+    }
+    return null;
   }
 
   String toString() => "Library($uri)";
@@ -1888,7 +2020,7 @@ class Allocations {
   bool get empty => accumulated.empty && current.empty;
 }
 
-class Class extends ServiceObject with Coverage {
+class Class extends HeapObject with Coverage {
   @observable Library library;
 
   @observable bool isAbstract;
@@ -1921,8 +2053,14 @@ class Class extends ServiceObject with Coverage {
   Class._empty(ServiceObjectOwner owner) : super._empty(owner);
 
   void _update(ObservableMap map, bool mapIsRef) {
+    _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
     name = map['name'];
-    vmName = (map.containsKey('vmName') ? map['vmName'] : name);
+    vmName = (map.containsKey('_vmName') ? map['_vmName'] : name);
+    if (vmName == '::') {
+      name = 'top-level-class';  // Better than ''
+    }
     var idPrefix = "classes/";
     assert(id.startsWith(idPrefix));
     vmCid = int.parse(id.substring(idPrefix.length));
@@ -2015,18 +2153,15 @@ class Class extends ServiceObject with Coverage {
   String toString() => 'Class($vmName)';
 }
 
-class Instance extends ServiceObject {
+class Instance extends HeapObject {
   @observable String kind;
-  @observable Class clazz;
-  @observable int size;
-  @observable int retainedSize;
   @observable String valueAsString;  // If primitive.
   @observable bool valueAsStringIsTruncated;
   @observable ServiceFunction function;  // If a closure.
   @observable Context context;  // If a closure.
   @observable String name;  // If a Type.
   @observable int length; // If a List, Map or TypedData.
-  @observable String pattern;  // If a RegExp.
+  @observable Instance pattern;  // If a RegExp.
 
   @observable var typeClass;
   @observable var fields;
@@ -2042,6 +2177,8 @@ class Instance extends ServiceObject {
   @observable Function twoByteFunction;  // If a RegExp.
   @observable Function externalOneByteFunction;  // If a RegExp.
   @observable Function externalTwoByteFunction;  // If a RegExp.
+  @observable bool isCaseSensitive;  // If a RegExp.
+  @observable bool isMultiLine;  // If a RegExp.
 
   bool get isAbstractType {
     return (kind == 'Type' || kind == 'TypeRef' ||
@@ -2084,9 +2221,9 @@ class Instance extends ServiceObject {
   void _update(ObservableMap map, bool mapIsRef) {
     // Extract full properties.
     _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
 
     kind = map['kind'];
-    clazz = map['class'];
     valueAsString = map['valueAsString'];
     // Coerce absence to false.
     valueAsStringIsTruncated = map['valueAsStringIsTruncated'] == true;
@@ -2100,8 +2237,8 @@ class Instance extends ServiceObject {
       return;
     }
 
-    size = map['size'];
-
+    isCaseSensitive = map['isCaseSensitive'];
+    isMultiLine = map['isMultiLine'];
     oneByteFunction = map['_oneByteFunction'];
     twoByteFunction = map['_twoByteFunction'];
     externalOneByteFunction = map['_externalOneByteFunction'];
@@ -2172,10 +2309,7 @@ class Instance extends ServiceObject {
 }
 
 
-class Context extends ServiceObject {
-  @observable Class clazz;
-  @observable int size;
-
+class Context extends HeapObject {
   @observable var parentContext;
   @observable int length;
   @observable var variables;
@@ -2185,6 +2319,7 @@ class Context extends ServiceObject {
   void _update(ObservableMap map, bool mapIsRef) {
     // Extract full properties.
     _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
 
     length = map['length'];
     parentContext = map['parent'];
@@ -2193,8 +2328,6 @@ class Context extends ServiceObject {
       return;
     }
 
-    size = map['size'];
-    clazz = map['class'];
     variables = map['variables'];
 
     // We are fully loaded.
@@ -2233,6 +2366,7 @@ class FunctionKind {
       case 'Native': return kNative;
       case 'Stub': return kStub;
       case 'Tag': return kTag;
+      case 'SignatureFunction': return kSignatureFunction;
     }
     Logger.root.severe('Unrecognized function kind: $value');
     throw new FallThroughError();
@@ -2255,10 +2389,11 @@ class FunctionKind {
   static FunctionKind kNative = new FunctionKind._internal('Native');
   static FunctionKind kTag = new FunctionKind._internal('Tag');
   static FunctionKind kStub = new FunctionKind._internal('Stub');
+  static FunctionKind kSignatureFunction = new FunctionKind._internal('SignatureFunction');
   static FunctionKind kUNKNOWN = new FunctionKind._internal('UNKNOWN');
 }
 
-class ServiceFunction extends ServiceObject with Coverage {
+class ServiceFunction extends HeapObject with Coverage {
   // owner is a Library, Class, or ServiceFunction.
   @observable ServiceObject dartOwner;
   @observable Library library;
@@ -2277,15 +2412,17 @@ class ServiceFunction extends ServiceObject with Coverage {
   @observable ProfileFunction profile;
   @observable Instance icDataArray;
 
+  bool get canCache => true;
   bool get immutable => false;
 
   ServiceFunction._empty(ServiceObject owner) : super._empty(owner);
 
   void _update(ObservableMap map, bool mapIsRef) {
-    name = map['name'];
-    vmName = (map.containsKey('vmName') ? map['vmName'] : name);
-
     _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
+    name = map['name'];
+    vmName = (map.containsKey('_vmName') ? map['_vmName'] : name);
 
     dartOwner = map['owner'];
     kind = FunctionKind.fromJSON(map['_kind']);
@@ -2325,7 +2462,7 @@ class ServiceFunction extends ServiceObject with Coverage {
 }
 
 
-class Field extends ServiceObject {
+class Field extends HeapObject {
   // Library or Class.
   @observable ServiceObject dartOwner;
   @observable Library library;
@@ -2347,9 +2484,10 @@ class Field extends ServiceObject {
   void _update(ObservableMap map, bool mapIsRef) {
     // Extract full properties.
     _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
 
     name = map['name'];
-    vmName = (map.containsKey('vmName') ? map['vmName'] : name);
+    vmName = (map.containsKey('_vmName') ? map['_vmName'] : name);
     dartOwner = map['owner'];
     declaredType = map['declaredType'];
     isStatic = map['static'];
@@ -2519,7 +2657,7 @@ class LocalVarLocation {
   LocalVarLocation(this.line, this.column, this.endColumn);
 }
 
-class Script extends ServiceObject with Coverage {
+class Script extends HeapObject with Coverage {
   Set<CallSite> callSites = new Set<CallSite>();
   final lines = new ObservableList<ScriptLine>();
   final _hits = new Map<int, int>();
@@ -2544,15 +2682,78 @@ class Script extends ServiceObject with Coverage {
   }
 
   /// This function maps a token position to a line number.
-  int tokenToLine(int token) => _tokenToLine[token];
+  int tokenToLine(int tokenPos) => _tokenToLine[tokenPos];
   Map _tokenToLine = {};
 
   /// This function maps a token position to a column number.
-  int tokenToCol(int token) => _tokenToCol[token];
+  int tokenToCol(int tokenPos) => _tokenToCol[tokenPos];
   Map _tokenToCol = {};
+
+  int guessTokenLength(int line, int column) {
+    String source = getLine(line).text;
+
+    var pos = column;
+    if (pos >= source.length) {
+      return null;
+    }
+
+    var c = source.codeUnitAt(pos);
+    if (c == 123) return 1; // { - Map literal
+
+    if (c == 91) return 1; // [ - List literal, index, index assignment
+
+    if (_isOperatorChar(c)) {
+      while (++pos < source.length &&
+             _isOperatorChar(source.codeUnitAt(pos)));
+      return pos - column;
+    }
+
+    if (_isInitialIdentifierChar(c)) {
+      while (++pos < source.length &&
+             _isIdentifierChar(source.codeUnitAt(pos)));
+      return pos - column;
+    }
+
+    return null;
+  }
+
+  static bool _isOperatorChar(int c) {
+    switch (c) {
+    case 25: // %
+    case 26: // &
+    case 42: // *
+    case 43: // +
+    case 45: // -:
+    case 47: // /
+    case 60: // <
+    case 61: // =
+    case 62: // >
+    case 94: // ^
+    case 124: // |
+    case 126: // ~
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  static bool _isInitialIdentifierChar(int c) {
+    if (c >= 65 && c <= 90) return true; // Upper
+    if (c >= 97 && c <= 122) return true; // Lower
+    if (c == 95) return true; // Underscore
+    if (c == 36) return true; // Dollar
+    return false;
+  }
+
+  static bool _isIdentifierChar(int c) {
+    if (_isInitialIdentifierChar(c)) return true;
+    return c >= 48 && c <= 75; // Digit
+  }
 
   void _update(ObservableMap map, bool mapIsRef) {
     _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
     uri = map['uri'];
     kind = map['_kind'];
     _shortUri = uri.substring(uri.lastIndexOf('/') + 1);
@@ -2924,15 +3125,15 @@ class ObjectPool extends HeapObject {
 
   ObjectPool._empty(ServiceObjectOwner owner) : super._empty(owner);
 
-  void _update(ObservableMap m, bool mapIsRef) {
-    _upgradeCollection(m, isolate);
-    clazz = m['class'];
-    length = m['length'];
+  void _update(ObservableMap map, bool mapIsRef) {
+    _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
+    length = map['length'];
     if (mapIsRef) {
       return;
     }
-    size = m['size'];
-    entries = m['_entries'];
+    entries = map['_entries'];
   }
 }
 
@@ -2947,17 +3148,17 @@ class ICData extends HeapObject {
 
   ICData._empty(ServiceObjectOwner owner) : super._empty(owner);
 
-  void _update(ObservableMap m, bool mapIsRef) {
-    _upgradeCollection(m, isolate);
-    clazz = m['class'];
-    dartOwner = m['_owner'];
-    selector = m['_selector'];
+  void _update(ObservableMap map, bool mapIsRef) {
+    _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
+    dartOwner = map['_owner'];
+    selector = map['_selector'];
     if (mapIsRef) {
       return;
     }
-    size = m['size'];
-    argumentsDescriptor = m['_argumentsDescriptor'];
-    entries = m['_entries'];
+    argumentsDescriptor = map['_argumentsDescriptor'];
+    entries = map['_entries'];
   }
 }
 
@@ -2970,15 +3171,15 @@ class Instructions extends HeapObject {
 
   Instructions._empty(ServiceObjectOwner owner) : super._empty(owner);
 
-  void _update(ObservableMap m, bool mapIsRef) {
-    _upgradeCollection(m, isolate);
-    clazz = m['class'];
-    code = m['_code'];
+  void _update(ObservableMap map, bool mapIsRef) {
+    _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
+    code = map['_code'];
     if (mapIsRef) {
       return;
     }
-    size = m['size'];
-    objectPool = m['_objectPool'];
+    objectPool = map['_objectPool'];
   }
 }
 
@@ -2990,14 +3191,14 @@ class TokenStream extends HeapObject {
 
   TokenStream._empty(ServiceObjectOwner owner) : super._empty(owner);
 
-  void _update(ObservableMap m, bool mapIsRef) {
+  void _update(ObservableMap map, bool mapIsRef) {
+    _upgradeCollection(map, isolate);
+    super._update(map, mapIsRef);
+
     if (mapIsRef) {
       return;
     }
-    _upgradeCollection(m, isolate);
-    clazz = m['class'];
-    size = m['size'];
-    privateKey = m['privateKey'];
+    privateKey = map['privateKey'];
   }
 }
 
@@ -3047,8 +3248,16 @@ class CodeInstruction extends Observable {
     if (address == 0) {
       return;
     }
-
-    jumpTarget = instructionsByAddressOffset[address - startAddress];
+    var relativeAddress = address - startAddress;
+    if (relativeAddress < 0) {
+      Logger.root.warning('Bad address resolving jump target $relativeAddress');
+      return;
+    }
+    if (relativeAddress >= instructionsByAddressOffset.length) {
+      Logger.root.warning('Bad address resolving jump target $relativeAddress');
+      return;
+    }
+    jumpTarget = instructionsByAddressOffset[relativeAddress];
   }
 }
 
@@ -3160,14 +3369,13 @@ class Code extends HeapObject {
 
   void _update(ObservableMap m, bool mapIsRef) {
     name = m['name'];
-    vmName = (m.containsKey('vmName') ? m['vmName'] : name);
+    vmName = (m.containsKey('_vmName') ? m['_vmName'] : name);
     isOptimized = m['_optimized'];
     kind = CodeKind.fromString(m['kind']);
     if (mapIsRef) {
       return;
     }
     _loaded = true;
-    size = m['size'];
     startAddress = int.parse(m['_startAddress'], radix:16);
     endAddress = int.parse(m['_endAddress'], radix:16);
     function = isolate.getFromMap(m['function']);
@@ -3202,6 +3410,9 @@ class Code extends HeapObject {
       return;
     }
     _processInline(inlinedFunctionsTable, inlinedIntervals);
+
+    _upgradeCollection(m, isolate);
+    super._update(m, mapIsRef);
   }
 
   CodeInlineInterval findInterval(int pc) {
@@ -3248,7 +3459,7 @@ class Code extends HeapObject {
       var pcOffset = 0;
       if (disassembly[i] != '') {
         // Not a code comment, extract address.
-        address = int.parse(disassembly[i]);
+        address = int.parse(disassembly[i], radix:16);
         pcOffset = address - startAddress;
       }
       var instruction = new CodeInstruction(address, pcOffset, machine, human);
@@ -3517,7 +3728,7 @@ class Frame extends ServiceObject {
     this.variables = map['vars'];
   }
 
-  String toString() => "Frame(${function.qualifiedName})";
+  String toString() => "Frame(${function.qualifiedName} $location)";
 }
 
 

@@ -13,9 +13,10 @@ import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
 import '../../abstract_context.dart';
+import '../../utils.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(OpTypeTest);
 }
 
@@ -235,6 +236,12 @@ class OpTypeTest {
   test_Block_identifier_partial() {
     addTestSource('class X {a() {var f; {var x;} D^ var r;} void b() { }}');
     assertOpType(returnValue: true, typeNames: true, voidReturn: true);
+  }
+
+  test_Block_keyword() {
+    addTestSource('class C { static C get instance => null; } main() {C.in^}');
+    assertOpType(
+        prefixed: true, returnValue: true, typeNames: true, voidReturn: true);
   }
 
   test_Break_after_label() {
@@ -1124,16 +1131,69 @@ class C2 {
     assertOpType(typeNames: true);
   }
 
-  test_SwitchCase() {
-    // SimpleIdentifier  SwitchCase  SwitchStatement
-    addTestSource('''m() {switch (x) {case ^D: return;}}''');
-    // TODO (danrubel) should refine this to return constants
+  test_SwitchCase_before() {
+    // SwitchCase  SwitchStatement  Block
+    addTestSource('main() {switch(k) {^case 1:}}');
+    assertOpType();
+  }
+
+  test_SwitchCase_between() {
+    // SwitchCase  SwitchStatement  Block
+    addTestSource('main() {switch(k) {case 1: ^ case 2: return}}');
     assertOpType(returnValue: true, typeNames: true, voidReturn: true);
   }
 
-  test_SwitchStatement() {
+  test_SwitchCase_expression1() {
+    // SimpleIdentifier  SwitchCase  SwitchStatement
+    addTestSource('''m() {switch (x) {case ^D: return;}}''');
+    assertOpType(returnValue: true, typeNames: true);
+  }
+
+  test_SwitchCase_expression2() {
+    // SimpleIdentifier  SwitchCase  SwitchStatement
+    addTestSource('''m() {switch (x) {case ^}}''');
+    assertOpType(returnValue: true, typeNames: true);
+  }
+
+  test_SwitchDefault_before() {
+    // SwitchDefault  SwitchStatement  Block
+    addTestSource('main() {switch(k) { ^ default: return;}}');
+    assertOpType();
+  }
+
+  test_SwitchDefault_between() {
+    // SwitchDefault  SwitchStatement  Block
+    addTestSource('main() {switch(k) {case 1: ^ default: return;}}');
+    assertOpType(returnValue: true, typeNames: true, voidReturn: true);
+  }
+
+  test_SwitchStatement_body_empty() {
+    // Token('}')  SwitchStatement  Block
+    addTestSource('main() {switch(k) {^}}');
+    assertOpType();
+  }
+
+  test_SwitchStatement_body_end() {
+    // Token('}')  SwitchStatement  Block
+    addTestSource('main() {switch(k) {case 1:^}}');
+    assertOpType(returnValue: true, typeNames: true, voidReturn: true);
+  }
+
+  test_SwitchStatement_expression1() {
     // SimpleIdentifier  SwitchStatement  Block
     addTestSource('main() {switch(^k) {case 1:{}}}');
+    assertOpType(returnValue: true, typeNames: true);
+  }
+
+  test_SwitchStatement_expression2() {
+    // SimpleIdentifier  SwitchStatement  Block
+    addTestSource('main() {switch(k^) {case 1:{}}}');
+    assertOpType(returnValue: true, typeNames: true);
+  }
+
+  test_SwitchStatement_expression_empty() {
+    // SimpleIdentifier  SwitchStatement  Block
+    addTestSource('main() {switch(^) {case 1:{}}}');
     assertOpType(returnValue: true, typeNames: true);
   }
 

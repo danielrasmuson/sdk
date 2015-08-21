@@ -3,15 +3,19 @@
 // BSD-style license that can be found in the LICENSE file.
 
 import 'dart:async';
-import "package:expect/expect.dart";
-import "package:async_helper/async_helper.dart";
-import "package:compiler/src/dart2jslib.dart";
-import "package:compiler/src/elements/elements.dart";
-import "package:compiler/src/tree/tree.dart";
-import "package:compiler/src/types/types.dart";
-import "mock_compiler.dart";
-import "mock_libraries.dart";
+import 'package:expect/expect.dart';
+import 'package:async_helper/async_helper.dart';
+import 'package:compiler/src/compiler.dart';
+import 'package:compiler/src/diagnostics/messages.dart' show MessageKind;
+import 'package:compiler/src/elements/elements.dart';
 import 'package:compiler/src/elements/modelx.dart';
+import 'package:compiler/src/tree/tree.dart';
+import 'package:compiler/src/types/types.dart';
+import 'package:compiler/src/universe/universe.dart' show Selector;
+import 'package:compiler/src/world.dart';
+
+import 'mock_compiler.dart';
+import 'mock_libraries.dart';
 
 Future<Compiler> applyPatch(String script, String patch,
                             {bool analyzeAll: false,
@@ -868,7 +872,7 @@ testPatchAndSelector() {
 
     // Check that a method just in the patch class is a target for a
     // typed selector.
-    Selector selector = new Selector.call('method', compiler.coreLibrary, 0);
+    Selector selector = new Selector.call(const PublicName('method'), 0);
     TypeMask typeMask = new TypeMask.exact(cls, world);
     FunctionElement method = cls.implementation.lookupLocalMember('method');
     method.computeType(compiler);
@@ -877,7 +881,7 @@ testPatchAndSelector() {
 
     // Check that the declaration method in the declaration class is a target
     // for a typed selector.
-    selector = new Selector.call('clear', compiler.coreLibrary, 0);
+    selector = new Selector.call(const PublicName('clear'), 0);
     typeMask = new TypeMask.exact(cls, world);
     method = cls.lookupLocalMember('clear');
     method.computeType(compiler);

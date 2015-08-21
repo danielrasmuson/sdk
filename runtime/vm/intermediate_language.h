@@ -335,6 +335,8 @@ class Value : public ZoneAllocated {
 
   void PrintTo(BufferFormatter* f) const;
 
+  const char* ToCString() const;
+
   const char* DebugName() const { return "Value"; }
 
   bool IsSmiValue() { return Type()->ToCid() == kSmiCid; }
@@ -1748,7 +1750,7 @@ class Definition : public Instruction {
   //    - non-constant sentinel
   //    - a constant (any non-sentinel value)
   //    - unknown sentinel
-  Object& constant_value() const { return constant_value_; }
+  Object& constant_value();
 
   virtual void InferRange(RangeAnalysis* analysis, Range* range);
 
@@ -1801,7 +1803,7 @@ class Definition : public Instruction {
   Value* input_use_list_;
   Value* env_use_list_;
 
-  Object& constant_value_;
+  Object* constant_value_;
 
   DISALLOW_COPY_AND_ASSIGN(Definition);
 };
@@ -3471,7 +3473,7 @@ class StoreInstanceFieldInstr : public TemplateDefinition<2, NoThrow> {
                           Value* value,
                           StoreBarrierType emit_store_barrier,
                           intptr_t token_pos)
-      : field_(Field::Handle()),
+      : field_(Field::ZoneHandle()),
         offset_in_bytes_(offset_in_bytes),
         emit_store_barrier_(emit_store_barrier),
         token_pos_(token_pos),
@@ -3873,7 +3875,7 @@ class StringInterpolateInstr : public TemplateDefinition<1, Throws> {
   StringInterpolateInstr(Value* value, intptr_t token_pos)
       : TemplateDefinition(Isolate::Current()->GetNextDeoptId()),
         token_pos_(token_pos),
-        function_(Function::Handle()) {
+        function_(Function::ZoneHandle()) {
     SetInputAt(0, value);
   }
 

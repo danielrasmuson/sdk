@@ -7,9 +7,11 @@ library dart2js.serialization_test;
 import 'dart:io';
 import 'memory_compiler.dart';
 import 'package:async_helper/async_helper.dart';
+import 'package:compiler/src/constants/constructors.dart';
 import 'package:compiler/src/constants/expressions.dart';
 import 'package:compiler/src/dart_types.dart';
-import 'package:compiler/src/dart2jslib.dart';
+import 'package:compiler/src/compiler.dart';
+import 'package:compiler/src/diagnostics/invariant.dart';
 import 'package:compiler/src/elements/elements.dart';
 import 'package:compiler/src/elements/visitor.dart';
 import 'package:compiler/src/ordered_typeset.dart';
@@ -43,9 +45,10 @@ main(List<String> arguments) {
   if (entryPoint == null) {
     entryPoint = Uri.parse('dart:core');
   }
-  Compiler compiler = compilerFor({}, options: ['--analyze-all']);
   asyncTest(() async {
-    await compiler.runCompiler(entryPoint);
+    CompilationResult result = await runCompiler(
+        entryPoint: entryPoint, options: ['--analyze-all']);
+    Compiler compiler = result.compiler;
     testSerialization(compiler.libraryLoader.libraries,
                       outPath: outPath,
                       prettyPrint: prettyPrint);

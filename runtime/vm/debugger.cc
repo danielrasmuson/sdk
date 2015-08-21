@@ -1270,6 +1270,7 @@ void Debugger::SetStepOut() {
   resume_action_ = kStepOut;
 }
 
+
 RawFunction* Debugger::ResolveFunction(const Library& library,
                                        const String& class_name,
                                        const String& function_name) {
@@ -2322,6 +2323,13 @@ void Debugger::Pause(DebuggerEvent* event) {
 }
 
 
+void Debugger::EnterSingleStepMode() {
+  stepping_fp_ = 0;
+  DeoptimizeWorld();
+  isolate_->set_single_step(true);
+}
+
+
 void Debugger::HandleSteppingRequest(DebuggerStackTrace* stack_trace) {
   stepping_fp_ = 0;
   if (resume_action_ == kSingleStep) {
@@ -2387,7 +2395,17 @@ void Debugger::SignalPausedEvent(ActivationFrame* top_frame,
   event.set_top_frame(top_frame);
   event.set_breakpoint(bpt);
   Object& closure_or_null = Object::Handle(top_frame->GetAsyncOperation());
-  event.set_async_continuation(&closure_or_null);
+  if (!closure_or_null.IsNull()) {
+    event.set_async_continuation(&closure_or_null);
+    const Script& script = Script::Handle(top_frame->SourceScript());
+    const TokenStream& tokens = TokenStream::Handle(script.tokens());
+    TokenStream::Iterator iter(tokens, top_frame->TokenPos());
+    if ((iter.CurrentTokenKind() == Token::kIDENT) &&
+        ((iter.CurrentLiteral() == Symbols::Await().raw()) ||
+         (iter.CurrentLiteral() == Symbols::YieldKw().raw()))) {
+      event.set_at_async_jump(true);
+    }
+  }
   Pause(&event);
 }
 

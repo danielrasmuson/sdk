@@ -963,7 +963,7 @@ abstract class HttpRequest implements Stream<List<int>> {
    * The URI for the request.
    *
    * This provides access to the
-   * path, query string, and fragment identifier for the request.
+   * path and query string for the request.
    */
   Uri get uri;
 
@@ -1343,7 +1343,8 @@ abstract class HttpClient {
    *
    * The HTTP method to use is specified in [method], the server is
    * specified using [host] and [port], and the path (including
-   * possible fragment and query) is specified using [path].
+   * a possible query) is specified using [path].
+   * The path may also contain a URI fragment, which will be ignored.
    *
    * The `Host` header for the request will be set to the value
    * [host]:[port]. This can be overridden through the
@@ -1382,7 +1383,7 @@ abstract class HttpClient {
    * Opens a HTTP connection using the GET method.
    *
    * The server is specified using [host] and [port], and the path
-   * (including possible fragment and query) is specified using
+   * (including a possible query) is specified using
    * [path].
    *
    * See [open] for details.
@@ -1402,7 +1403,7 @@ abstract class HttpClient {
    * Opens a HTTP connection using the POST method.
    *
    * The server is specified using [host] and [port], and the path
-   * (including possible fragment and query) is specified using
+   * (including a possible query) is specified using
    * [path].
    *
    * See [open] for details.
@@ -1422,8 +1423,7 @@ abstract class HttpClient {
    * Opens a HTTP connection using the PUT method.
    *
    * The server is specified using [host] and [port], and the path
-   * (including possible fragment and query) is specified using
-   * [path].
+   * (including a possible query) is specified using [path].
    *
    * See [open] for details.
    */
@@ -1442,8 +1442,7 @@ abstract class HttpClient {
    * Opens a HTTP connection using the DELETE method.
    *
    * The server is specified using [host] and [port], and the path
-   * (including possible fragment and query) is specified using
-   * [path].
+   * (including s possible query) is specified using [path].
    *
    * See [open] for details.
    */
@@ -1462,8 +1461,7 @@ abstract class HttpClient {
    * Opens a HTTP connection using the PATCH method.
    *
    * The server is specified using [host] and [port], and the path
-   * (including possible fragment and query) is specified using
-   * [path].
+   * (including a possible query) is specified using [path].
    *
    * See [open] for details.
    */
@@ -1482,8 +1480,7 @@ abstract class HttpClient {
    * Opens a HTTP connection using the HEAD method.
    *
    * The server is specified using [host] and [port], and the path
-   * (including possible fragment and query) is specified using
-   * [path].
+   * (including a possible query) is specified using [path].
    *
    * See [open] for details.
    */

@@ -55,19 +55,19 @@ class ScopedIsolateStackLimits : public ValueObject {
 };
 
 
-// Clears/restores Isolate::long_jump_base on construction/destruction.
+// Clears/restores Thread::long_jump_base on construction/destruction.
 // Ensures that we do not attempt to long jump across Dart frames.
 class SuspendLongJumpScope : public StackResource {
  public:
-  explicit SuspendLongJumpScope(Isolate* isolate)
-      : StackResource(isolate),
-        saved_long_jump_base_(isolate->long_jump_base()) {
-    isolate->set_long_jump_base(NULL);
+  explicit SuspendLongJumpScope(Thread* thread)
+      : StackResource(thread),
+        saved_long_jump_base_(thread->long_jump_base()) {
+    thread->set_long_jump_base(NULL);
   }
 
   ~SuspendLongJumpScope() {
-    ASSERT(isolate()->long_jump_base() == NULL);
-    isolate()->set_long_jump_base(saved_long_jump_base_);
+    ASSERT(thread()->long_jump_base() == NULL);
+    thread()->set_long_jump_base(saved_long_jump_base_);
   }
 
  private:
@@ -93,12 +93,12 @@ RawObject* DartEntry::InvokeFunction(const Function& function,
   }
   // Now Call the invoke stub which will invoke the dart function.
   invokestub entrypoint = reinterpret_cast<invokestub>(
-      isolate->stub_code()->InvokeDartCodeEntryPoint());
+      StubCode::InvokeDartCode_entry()->EntryPoint());
   const Code& code = Code::Handle(zone, function.CurrentCode());
   ASSERT(!code.IsNull());
   ASSERT(Isolate::Current()->no_callback_scope_depth() == 0);
   ScopedIsolateStackLimits stack_limit(isolate);
-  SuspendLongJumpScope suspend_long_jump_scope(isolate);
+  SuspendLongJumpScope suspend_long_jump_scope(thread);
 #if defined(USING_SIMULATOR)
 #if defined(ARCH_IS_64_BIT)
   // TODO(zra): Change to intptr_t so we have only one case.

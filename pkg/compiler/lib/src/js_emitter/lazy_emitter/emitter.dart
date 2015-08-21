@@ -26,7 +26,7 @@ import '../js_emitter.dart' show
 import '../js_emitter.dart' as emitterTask show
     Emitter;
 
-import '../../util/util.dart' show
+import '../../diagnostics/spannable.dart' show
     NO_LOCATION_SPANNABLE;
 
 class Emitter implements emitterTask.Emitter {
@@ -40,6 +40,9 @@ class Emitter implements emitterTask.Emitter {
       : this._compiler = compiler,
         this.namer = namer,
         _emitter = new ModelEmitter(compiler, namer, nativeEmitter);
+
+  @override
+  String get patchVersion => "lazy";
 
   @override
   int emitProgram(ProgramBuilder programBuilder) {
@@ -173,6 +176,9 @@ class Emitter implements emitterTask.Emitter {
 
       case JsBuiltin.getType:
         return _emitter.templateForReadType;
+
+      case JsBuiltin.createDartClosureFromNameOfStaticFunction:
+        throw new UnsupportedError('createDartClosureFromNameOfStaticFunction');
 
       default:
         _compiler.internalError(NO_LOCATION_SPANNABLE,

@@ -40,9 +40,9 @@ class AnalysisError {
     ErrorCode errorCode2 = o2.errorCode;
     ErrorSeverity errorSeverity1 = errorCode1.errorSeverity;
     ErrorSeverity errorSeverity2 = errorCode2.errorSeverity;
-    ErrorType errorType1 = errorCode1.type;
-    ErrorType errorType2 = errorCode2.type;
     if (errorSeverity1 == errorSeverity2) {
+      ErrorType errorType1 = errorCode1.type;
+      ErrorType errorType2 = errorCode2.type;
       return errorType1.compareTo(errorType2);
     } else {
       return errorSeverity2.compareTo(errorSeverity1);
@@ -80,7 +80,7 @@ class AnalysisError {
    * The number of characters from the offset to the end of the source which
    * encompasses the compilation error.
    */
-  int _length = 0;
+  int length = 0;
 
   /**
    * A flag indicating whether this error can be shown to be a non-issue because
@@ -94,9 +94,8 @@ class AnalysisError {
    * [length]. The error will have the given [errorCode] and the list of
    * [arguments] will be used to complete the message.
    */
-  AnalysisError(this.source, this.offset, int length, this.errorCode,
+  AnalysisError(this.source, this.offset, this.length, this.errorCode,
       [List<Object> arguments]) {
-    this._length = length;
     this._message = formatList(errorCode.message, arguments);
     String correctionTemplate = errorCode.correction;
     if (correctionTemplate != null) {
@@ -141,13 +140,6 @@ class AnalysisError {
   }
 
   /**
-   * Return the length of the error location, that is, the number of characters
-   * from the offset to the end of the source which encompasses the compilation
-   * error.
-   */
-  int get length => _length;
-
-  /**
    * Return the message to be displayed for this error. The message should
    * indicate what is wrong and why it is wrong.
    */
@@ -167,7 +159,7 @@ class AnalysisError {
     if (!identical(errorCode, other.errorCode)) {
       return false;
     }
-    if (offset != other.offset || _length != other._length) {
+    if (offset != other.offset || length != other.length) {
       return false;
     }
     if (isStaticOnly != other.isStaticOnly) {
@@ -197,7 +189,7 @@ class AnalysisError {
     buffer.write("(");
     buffer.write(offset);
     buffer.write("..");
-    buffer.write(offset + _length - 1);
+    buffer.write(offset + length - 1);
     buffer.write("): ");
     //buffer.write("(" + lineNumber + ":" + columnNumber + "): ");
     buffer.write(_message);
@@ -3960,18 +3952,6 @@ class StaticWarningCode extends ErrorCode {
           "The exported libraries '{0}' and '{1}' cannot have the same name '{2}'");
 
   /**
-   * 14.2 Exports: It is a static warning to export two different libraries with
-   * the same name.
-   *
-   * Parameters:
-   * 0: the uri pointing to a first library
-   * 1: the uri pointing to a second library
-   */
-  static const StaticWarningCode EXPORT_DUPLICATED_LIBRARY_UNNAMED =
-      const StaticWarningCode('EXPORT_DUPLICATED_LIBRARY_UNNAMED',
-          "The exported libraries '{0}' and '{1}' cannot both be unnamed");
-
-  /**
    * 12.14.2 Binding Actuals to Formals: It is a static warning if <i>m &lt;
    * h</i> or if <i>m &gt; n</i>.
    *
@@ -4125,18 +4105,6 @@ class StaticWarningCode extends ErrorCode {
   static const StaticWarningCode IMPORT_DUPLICATED_LIBRARY_NAMED =
       const StaticWarningCode('IMPORT_DUPLICATED_LIBRARY_NAMED',
           "The imported libraries '{0}' and '{1}' cannot have the same name '{2}'");
-
-  /**
-   * 14.1 Imports: It is a static warning to import two different libraries with
-   * the same name.
-   *
-   * Parameters:
-   * 0: the uri pointing to a first library
-   * 1: the uri pointing to a second library
-   */
-  static const StaticWarningCode IMPORT_DUPLICATED_LIBRARY_UNNAMED =
-      const StaticWarningCode('IMPORT_DUPLICATED_LIBRARY_UNNAMED',
-          "The imported libraries '{0}' and '{1}' cannot both be unnamed");
 
   /**
    * 14.1 Imports: It is a static warning if the specified URI of a deferred

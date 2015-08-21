@@ -161,7 +161,7 @@ PageSpace::PageSpace(Heap* heap,
       tasks_lock_(new Monitor()),
       tasks_(0),
 #if defined(DEBUG)
-      is_iterating_(false),
+      iterating_thread_(NULL),
 #endif
       page_space_controller_(heap,
                              FLAG_old_gen_growth_space_ratio,
@@ -771,7 +771,7 @@ void PageSpace::MarkSweep(bool invoke_api_callbacks) {
   // Perform various cleanup that relies on no tasks interfering.
   isolate->class_table()->FreeOldTables();
 
-  NoHandleScope no_handles(isolate);
+  NoSafepointScope no_safepoints;
 
   if (FLAG_print_free_list_before_gc) {
     OS::Print("Data Freelist (before GC):\n");

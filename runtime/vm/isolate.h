@@ -7,6 +7,7 @@
 
 #include "include/dart_api.h"
 #include "platform/assert.h"
+#include "vm/atomic.h"
 #include "vm/base_isolate.h"
 #include "vm/class_table.h"
 #include "vm/counters.h"
@@ -50,7 +51,6 @@ class IsolateSpawnState;
 class InterruptableThreadState;
 class Library;
 class Log;
-class LongJumpScope;
 class MessageHandler;
 class Mutex;
 class Object;
@@ -122,12 +122,6 @@ class Isolate : public BaseIsolate {
     return thread == NULL ? NULL : thread->isolate();
   }
 
-  static void InitOnce();
-  static Isolate* Init(const char* name_prefix,
-                       const Dart_IsolateFlags& api_flags,
-                       bool is_vm_isolate = false);
-  void Shutdown();
-
   // Register a newly introduced class.
   void RegisterClass(const Class& cls);
   void RegisterClassAt(intptr_t index, const Class& cls);
@@ -163,16 +157,15 @@ class Isolate : public BaseIsolate {
     message_notify_callback_ = value;
   }
 
-  // A thread that operates on this isolate and may execute Dart code.
-  // No other threads operating on this isolate may execute Dart code.
-  // TODO(koda): Remove after pivoting to thread in NativeArguments.
-  Thread* mutator_thread() {
-    DEBUG_ASSERT(mutator_thread_ == NULL || IsIsolateOf(mutator_thread_));
-    return mutator_thread_;
+  // Limited public access to BaseIsolate::mutator_thread_ for code that
+  // must treat the mutator as the default or a special case. Prefer code
+  // that works uniformly across all threads.
+  bool HasMutatorThread() {
+    return mutator_thread_ != NULL;
   }
-#if defined(DEBUG)
-  bool IsIsolateOf(Thread* thread);
-#endif  // DEBUG
+  bool MutatorThreadIsCurrentThread() {
+    return mutator_thread_ == Thread::Current();
+  }
 
   const char* name() const { return name_; }
   const char* debugger_name() const { return debugger_name_; }
@@ -244,12 +237,6 @@ class Isolate : public BaseIsolate {
   ApiState* api_state() const { return api_state_; }
   void set_api_state(ApiState* value) { api_state_ = value; }
 
-  StubCode* stub_code() const { return stub_code_; }
-  void set_stub_code(StubCode* value) { stub_code_ = value; }
-
-  LongJumpScope* long_jump_base() const { return long_jump_base_; }
-  void set_long_jump_base(LongJumpScope* value) { long_jump_base_ = value; }
-
   TimerList& timer_list() { return timer_list_; }
 
   void set_init_callback_data(void* value) {
@@ -280,15 +267,28 @@ class Isolate : public BaseIsolate {
 
   // Returns the current C++ stack pointer. Equivalent taking the address of a
   // stack allocated local, but plays well with AddressSanitizer.
+  // TODO(koda): Move to Thread.
   static uword GetCurrentStackPointer();
 
+  // Returns true if any of the interrupts specified by 'interrupt_bits' are
+  // currently scheduled for this isolate, but leaves them unchanged.
+  //
+  // NOTE: The read uses relaxed memory ordering, i.e., it is atomic and
+  // an interrupt is guaranteed to be observed eventually, but any further
+  // order guarantees must be ensured by other synchronization. See the
+  // tests in isolate_test.cc for example usage.
+  bool HasInterruptsScheduled(uword interrupt_bits) {
+    ASSERT(interrupt_bits == (interrupt_bits & kInterruptsMask));
+    uword limit = AtomicOperations::LoadRelaxed(&stack_limit_);
+    return (limit != saved_stack_limit_) &&
+        (((limit & kInterruptsMask) & interrupt_bits) != 0);
+  }
+
+  // Access to the current stack limit for generated code.  This may be
+  // overwritten with a special value to trigger interrupts.
   uword stack_limit_address() const {
     return reinterpret_cast<uword>(&stack_limit_);
   }
-
-  // The current stack limit.  This may be overwritten with a special
-  // value to trigger interrupts.
-  uword stack_limit() const { return stack_limit_; }
   static intptr_t stack_limit_offset() {
     return OFFSET_OF(Isolate, stack_limit_);
   }
@@ -327,12 +327,12 @@ class Isolate : public BaseIsolate {
   enum {
     kApiInterrupt = 0x1,      // An interrupt from Dart_InterruptIsolate.
     kMessageInterrupt = 0x2,  // An interrupt to process an out of band message.
-    kStoreBufferInterrupt = 0x4,  // An interrupt to process the store buffer.
+    kVMInterrupt = 0x4,  // Internal VM checks: safepoints, store buffers, etc.
 
     kInterruptsMask =
         kApiInterrupt |
         kMessageInterrupt |
-        kStoreBufferInterrupt,
+        kVMInterrupt,
   };
 
   void ScheduleInterrupts(uword interrupt_bits);
@@ -474,7 +474,7 @@ class Isolate : public BaseIsolate {
 
   void AddErrorListener(const SendPort& listener);
   void RemoveErrorListener(const SendPort& listener);
-  void NotifyErrorListeners(const String& msg, const String& stacktrace);
+  bool NotifyErrorListeners(const String& msg, const String& stacktrace);
 
   bool ErrorsFatal() const { return errors_fatal_; }
   void SetErrorsFatal(bool val) { errors_fatal_ = val; }
@@ -573,14 +573,6 @@ class Isolate : public BaseIsolate {
     return trace_buffer_;
   }
 
-  void SetTimelineEventRecorder(TimelineEventRecorder* timeline_event_recorder);
-
-  TimelineEventRecorder* timeline_event_recorder() const {
-    return timeline_event_recorder_;
-  }
-
-  void RemoveTimelineEventRecorder();
-
   DeoptContext* deopt_context() const { return deopt_context_; }
   void set_deopt_context(DeoptContext* value) {
     ASSERT(value == NULL || deopt_context_ == NULL);
@@ -642,15 +634,6 @@ class Isolate : public BaseIsolate {
 
   void PrintJSON(JSONStream* stream, bool ref = true);
 
-  void set_thread_state(InterruptableThreadState* state) {
-    ASSERT((thread_state_ == NULL) || (state == NULL));
-    thread_state_ = state;
-  }
-
-  InterruptableThreadState* thread_state() const {
-    return thread_state_;
-  }
-
   CompilerStats* compiler_stats() {
     return compiler_stats_;
   }
@@ -696,6 +679,11 @@ class Isolate : public BaseIsolate {
   RawUserTag* default_tag() const { return default_tag_; }
   void set_default_tag(const UserTag& tag);
 
+  RawGrowableObjectArray* collected_closures() const {
+    return collected_closures_;
+  }
+  void set_collected_closures(const GrowableObjectArray& value);
+
   Metric* metrics_list_head() {
     return metrics_list_head_;
   }
@@ -709,6 +697,11 @@ class Isolate : public BaseIsolate {
   }
   void set_deoptimized_code_array(const GrowableObjectArray& value);
   void TrackDeoptimizedCode(const Code& code);
+
+  bool compilation_allowed() const { return compilation_allowed_; }
+  void set_compilation_allowed(bool allowed) {
+    compilation_allowed_ = allowed;
+  }
 
 #if defined(DEBUG)
 #define REUSABLE_HANDLE_SCOPE_ACCESSORS(object)                                \
@@ -748,7 +741,15 @@ class Isolate : public BaseIsolate {
   }
 
  private:
+  friend class Dart;  // Init, InitOnce, Shutdown.
+
   explicit Isolate(const Dart_IsolateFlags& api_flags);
+
+  static void InitOnce();
+  static Isolate* Init(const char* name_prefix,
+                       const Dart_IsolateFlags& api_flags,
+                       bool is_vm_isolate = false);
+  void Shutdown();
 
   void BuildName(const char* name_prefix);
   void PrintInvokedFunctions();
@@ -765,9 +766,17 @@ class Isolate : public BaseIsolate {
     user_tag_ = tag;
   }
 
-  void set_mutator_thread(Thread* thread) {
+  void ClearMutatorThread() {
+    mutator_thread_ = NULL;
+  }
+  void MakeCurrentThreadMutator(Thread* thread) {
+    ASSERT(thread == Thread::Current());
+    DEBUG_ASSERT(IsIsolateOf(thread));
     mutator_thread_ = thread;
   }
+#if defined(DEBUG)
+  bool IsIsolateOf(Thread* thread);
+#endif  // DEBUG
 
   template<class T> T* AllocateReusableHandle();
 
@@ -792,7 +801,6 @@ class Isolate : public BaseIsolate {
   Dart_EnvironmentCallback environment_callback_;
   Dart_LibraryTagHandler library_tag_handler_;
   ApiState* api_state_;
-  StubCode* stub_code_;
   Debugger* debugger_;
   bool single_step_;
   bool resume_request_;
@@ -800,7 +808,6 @@ class Isolate : public BaseIsolate {
   Flags flags_;
   Random random_;
   Simulator* simulator_;
-  LongJumpScope* long_jump_base_;
   TimerList timer_list_;
   intptr_t deopt_id_;
   Mutex* mutex_;  // protects stack_limit_ and saved_stack_limit_.
@@ -838,23 +845,23 @@ class Isolate : public BaseIsolate {
   // Trace buffer support.
   TraceBuffer* trace_buffer_;
 
-  // TimelineEvent buffer.
-  TimelineEventRecorder* timeline_event_recorder_;
-
   IsolateProfilerData* profiler_data_;
   Mutex profiler_data_mutex_;
-  InterruptableThreadState* thread_state_;
 
   VMTagCounters vm_tag_counters_;
   uword user_tag_;
   RawGrowableObjectArray* tag_table_;
   RawUserTag* current_tag_;
   RawUserTag* default_tag_;
+
+  RawGrowableObjectArray* collected_closures_;
   RawGrowableObjectArray* deoptimized_code_array_;
 
   Metric* metrics_list_head_;
 
   Counters counters_;
+
+  bool compilation_allowed_;
 
   // TODO(23153): Move this out of Isolate/Thread.
   CHA* cha_;
@@ -906,7 +913,6 @@ class Isolate : public BaseIsolate {
   // Manage list of existing isolates.
   static void AddIsolateTolist(Isolate* isolate);
   static void RemoveIsolateFromList(Isolate* isolate);
-  static void CheckForDuplicateThreadState(InterruptableThreadState* state);
 
   static Monitor* isolates_list_monitor_;  // Protects isolates_list_head_
   static Isolate* isolates_list_head_;
@@ -1013,19 +1019,27 @@ class IsolateSpawnState {
   IsolateSpawnState(Dart_Port parent_port,
                     const Function& func,
                     const Instance& message,
-                    bool paused);
+                    bool paused,
+                    bool errorsAreFatal,
+                    Dart_Port onExit,
+                    Dart_Port onError);
   IsolateSpawnState(Dart_Port parent_port,
                     const char* script_url,
                     const char* package_root,
                     const Instance& args,
                     const Instance& message,
-                    bool paused);
+                    bool paused,
+                    bool errorsAreFatal,
+                    Dart_Port onExit,
+                    Dart_Port onError);
   ~IsolateSpawnState();
 
   Isolate* isolate() const { return isolate_; }
   void set_isolate(Isolate* value) { isolate_ = value; }
 
   Dart_Port parent_port() const { return parent_port_; }
+  Dart_Port on_exit_port() const { return on_exit_port_; }
+  Dart_Port on_error_port() const { return on_error_port_; }
   char* script_url() const { return script_url_; }
   char* package_root() const { return package_root_; }
   char* library_url() const { return library_url_; }
@@ -1033,6 +1047,7 @@ class IsolateSpawnState {
   char* function_name() const { return function_name_; }
   bool is_spawn_uri() const { return library_url_ == NULL; }
   bool paused() const { return paused_; }
+  bool errors_are_fatal() const { return errors_are_fatal_; }
   Isolate::Flags* isolate_flags() { return &isolate_flags_; }
 
   RawObject* ResolveFunction();
@@ -1043,6 +1058,8 @@ class IsolateSpawnState {
  private:
   Isolate* isolate_;
   Dart_Port parent_port_;
+  Dart_Port on_exit_port_;
+  Dart_Port on_error_port_;
   char* script_url_;
   char* package_root_;
   char* library_url_;
@@ -1054,6 +1071,7 @@ class IsolateSpawnState {
   intptr_t serialized_message_len_;
   Isolate::Flags isolate_flags_;
   bool paused_;
+  bool errors_are_fatal_;
 };
 
 }  // namespace dart

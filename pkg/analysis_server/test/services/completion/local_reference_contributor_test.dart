@@ -12,10 +12,11 @@ import 'package:analysis_server/src/services/completion/local_reference_contribu
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
+import '../../utils.dart';
 import 'completion_test_util.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(LocalReferenceContributorTest);
 }
 
@@ -24,9 +25,14 @@ class LocalReferenceContributorTest extends AbstractSelectorSuggestionTest {
   @override
   CompletionSuggestion assertSuggestLocalClass(String name,
       {CompletionSuggestionKind kind: CompletionSuggestionKind.INVOCATION,
-      int relevance: DART_RELEVANCE_DEFAULT, bool isDeprecated: false}) {
+      int relevance: DART_RELEVANCE_DEFAULT, bool isDeprecated: false,
+      String elemFile, int elemOffset}) {
     return assertSuggestClass(name,
-        kind: kind, relevance: relevance, isDeprecated: isDeprecated);
+        elemFile: elemFile,
+        elemOffset: elemOffset,
+        isDeprecated: isDeprecated,
+        kind: kind,
+        relevance: relevance);
   }
 
   @override
@@ -36,8 +42,9 @@ class LocalReferenceContributorTest extends AbstractSelectorSuggestionTest {
   }
 
   @override
-  CompletionSuggestion assertSuggestLocalConstructor(String name) {
-    return assertSuggestConstructor(name);
+  CompletionSuggestion assertSuggestLocalConstructor(String name,
+      {int elemOffset}) {
+    return assertSuggestConstructor(name, elemOffset: elemOffset);
   }
 
   @override
@@ -51,7 +58,8 @@ class LocalReferenceContributorTest extends AbstractSelectorSuggestionTest {
   CompletionSuggestion assertSuggestLocalFunction(
       String name, String returnType,
       {CompletionSuggestionKind kind: CompletionSuggestionKind.INVOCATION,
-      bool deprecated: false, int relevance: DART_RELEVANCE_LOCAL_FUNCTION}) {
+      bool deprecated: false,
+      int relevance: DART_RELEVANCE_LOCAL_FUNCTION}) {
     return assertSuggestFunction(name, returnType,
         kind: kind, deprecated: deprecated, relevance: relevance);
   }
@@ -602,7 +610,7 @@ main() {new ^ String x = "hello";}''');
     return computeFull((bool result) {
       CompletionSuggestion suggestion;
 
-      suggestion = assertSuggestLocalConstructor('A');
+      suggestion = assertSuggestLocalConstructor('A', elemOffset: -1);
       expect(suggestion.element.parameters, '()');
       expect(suggestion.element.returnType, 'A');
       expect(suggestion.declaringType, 'A');

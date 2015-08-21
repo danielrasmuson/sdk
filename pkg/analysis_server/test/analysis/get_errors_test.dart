@@ -13,9 +13,10 @@ import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
 import '../analysis_abstract.dart';
+import '../utils.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(GetErrorsTest);
 }
 
@@ -50,7 +51,9 @@ main() {
 
   test_fileWithoutContext() {
     String file = '/outside.dart';
-    addFile(file, '''
+    addFile(
+        file,
+        '''
 main() {
   print(42);
 }
@@ -99,7 +102,7 @@ main() {
     // remove context, causes sending an "invalid file" error
     {
       Folder projectFolder = resourceProvider.getResource(projectPath);
-      server.contextManager.removeContext(projectFolder);
+      server.contextManager.callbacks.removeContext(projectFolder, <String>[]);
     }
     // wait for an error response
     return serverChannel.waitForResponse(request).then((Response response) {

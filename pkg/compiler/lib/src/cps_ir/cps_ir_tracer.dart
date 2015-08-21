@@ -110,7 +110,13 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
   visitLetCont(cps_ir.LetCont node) {
     if (IR_TRACE_LET_CONT) {
       String dummy = names.name(node);
-      String ids = node.continuations.map(names.name).join(', ');
+
+      String nameContinuation(cps_ir.Continuation cont) {
+        String name = names.name(cont);
+        return cont.isRecursive ? '$name*' : name;
+      }
+      
+      String ids = node.continuations.map(nameContinuation).join(', ');
       printStmt(dummy, "LetCont $ids");
     }
     visit(node.body);
@@ -227,12 +233,10 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
     printStmt(dummy, "Branch $condition ($trueCont, $falseCont)");
   }
 
-  visitSetMutableVariable(cps_ir.SetMutableVariable node) {
-    String dummy = names.name(node);
+  visitSetMutable(cps_ir.SetMutable node) {
     String variable = names.name(node.variable.definition);
     String value = formatReference(node.value);
-    printStmt(dummy, 'SetMutableVariable $variable := $value');
-    visit(node.body);
+    return 'SetMutable $variable := $value';
   }
 
   String formatReference(cps_ir.Reference ref) {
@@ -267,12 +271,10 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
   }
 
   visitSetField(cps_ir.SetField node) {
-    String dummy = names.name(node);
     String object = formatReference(node.object);
     String field = node.field.name;
     String value = formatReference(node.value);
-    printStmt(dummy, 'SetField $object.$field = $value');
-    visit(node.body);
+    return 'SetField $object.$field = $value';
   }
 
   visitGetField(cps_ir.GetField node) {
@@ -287,11 +289,9 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
   }
 
   visitSetStatic(cps_ir.SetStatic node) {
-    String dummy = names.name(node);
     String element = node.element.name;
     String value = formatReference(node.value);
-    printStmt(dummy, 'SetStatic $element = $value');
-    visit(node.body);
+    return 'SetStatic $element = $value';
   }
 
   visitGetLazyStatic(cps_ir.GetLazyStatic node) {
@@ -320,9 +320,9 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
     return "CreateFunction ${node.definition.element.name}";
   }
 
-  visitGetMutableVariable(cps_ir.GetMutableVariable node) {
+  visitGetMutable(cps_ir.GetMutable node) {
     String variable = names.name(node.variable.definition);
-    return 'GetMutableVariable $variable';
+    return 'GetMutable $variable';
   }
 
   visitReadTypeVariable(cps_ir.ReadTypeVariable node) {
@@ -337,11 +337,6 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
   visitTypeExpression(cps_ir.TypeExpression node) {
     return "TypeExpression ${node.dartType} "
         "${node.arguments.map(formatReference).join(', ')}";
-  }
-
-  visitNonTailThrow(cps_ir.NonTailThrow node) {
-    String value = formatReference(node.value);
-    return "NonTailThrow($value)";
   }
 
   visitCreateInvocationMirror(cps_ir.CreateInvocationMirror node) {
@@ -361,12 +356,18 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
     return 'ApplyBuiltinOperator $operator ($args)';
   }
 
+  visitApplyBuiltinMethod(cps_ir.ApplyBuiltinMethod node) {
+    String method = node.method.toString();
+    String receiver = formatReference(node.receiver);
+    String args = node.arguments.map(formatReference).join(', ');
+    return 'ApplyBuiltinMethod $method $receiver ($args)';
+  }
+
   @override
   visitForeignCode(cps_ir.ForeignCode node) {
     String id = names.name(node);
     String arguments = node.arguments.map(formatReference).join(', ');
-    String continuation = node.continuation == null ? ''
-        : ' ${formatReference(node.continuation)}';
+    String continuation = formatReference(node.continuation);
     printStmt(id, "ForeignCode ${node.type} ${node.codeTemplate.source} "
         "$arguments $continuation");
   }
@@ -387,6 +388,13 @@ class IRTracer extends TracerUtil implements cps_ir.Visitor {
     String index = formatReference(node.index);
     String value = formatReference(node.value);
     return 'SetIndex $object $index $value';
+  }
+
+  @override
+  visitAwait(cps_ir.Await node) {
+    String value = formatReference(node.input);
+    String continuation = formatReference(node.continuation);
+    return 'Await $value $continuation';
   }
 }
 
@@ -523,18 +531,6 @@ class BlockCollector implements cps_ir.Visitor {
   visitUnreachable(cps_ir.Unreachable node) {
   }
 
-  visitSetMutableVariable(cps_ir.SetMutableVariable exp) {
-    visit(exp.body);
-  }
-
-  visitSetField(cps_ir.SetField exp) {
-    visit(exp.body);
-  }
-
-  visitSetStatic(cps_ir.SetStatic exp) {
-    visit(exp.body);
-  }
-
   visitGetLazyStatic(cps_ir.GetLazyStatic exp) {
     addEdgeToContinuation(exp.continuation);
   }
@@ -583,7 +579,7 @@ class BlockCollector implements cps_ir.Visitor {
     unexpectedNode(node);
   }
 
-  visitGetMutableVariable(cps_ir.GetMutableVariable node) {
+  visitGetMutable(cps_ir.GetMutable node) {
     unexpectedNode(node);
   }
 
@@ -631,10 +627,6 @@ class BlockCollector implements cps_ir.Visitor {
     unexpectedNode(node);
   }
 
-  visitNonTailThrow(cps_ir.NonTailThrow node) {
-    unexpectedNode(node);
-  }
-
   visitCreateInvocationMirror(cps_ir.CreateInvocationMirror node) {
     unexpectedNode(node);
   }
@@ -644,6 +636,10 @@ class BlockCollector implements cps_ir.Visitor {
   }
 
   visitApplyBuiltinOperator(cps_ir.ApplyBuiltinOperator node) {
+    unexpectedNode(node);
+  }
+
+  visitApplyBuiltinMethod(cps_ir.ApplyBuiltinMethod node) {
     unexpectedNode(node);
   }
 
@@ -659,10 +655,25 @@ class BlockCollector implements cps_ir.Visitor {
     unexpectedNode(node);
   }
 
+  visitSetMutable(cps_ir.SetMutable node) {
+    unexpectedNode(node);
+  }
+
+  visitSetField(cps_ir.SetField node) {
+    unexpectedNode(node);
+  }
+
+  visitSetStatic(cps_ir.SetStatic node) {
+    unexpectedNode(node);
+  }
+
   @override
   visitForeignCode(cps_ir.ForeignCode node) {
-    if (node.continuation != null) {
-      addEdgeToContinuation(node.continuation);
-    }
+    addEdgeToContinuation(node.continuation);
+  }
+
+  @override
+  visitAwait(cps_ir.Await node) {
+    unexpectedNode(node);
   }
 }

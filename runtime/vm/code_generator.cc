@@ -23,6 +23,7 @@
 #include "vm/runtime_entry.h"
 #include "vm/stack_frame.h"
 #include "vm/symbols.h"
+#include "vm/thread_registry.h"
 #include "vm/verifier.h"
 
 namespace dart {
@@ -105,31 +106,38 @@ DEFINE_RUNTIME_ENTRY(TraceFunctionExit, 1) {
 // Return value: newly allocated array of length arg0.
 DEFINE_RUNTIME_ENTRY(AllocateArray, 2) {
   const Instance& length = Instance::CheckedHandle(arguments.ArgAt(0));
-  if (!length.IsSmi()) {
-    const String& error = String::Handle(String::NewFormatted(
-        "Length must be an integer in the range [0..%" Pd "].",
-        Array::kMaxElements));
-    Exceptions::ThrowArgumentError(error);
+  if (!length.IsInteger()) {
+    // Throw: new ArgumentError.value(length, "length", "is not an integer");
+    const Array& args = Array::Handle(Array::New(3));
+    args.SetAt(0, length);
+    args.SetAt(1, Symbols::Length());
+    args.SetAt(2, String::Handle(String::New("is not an integer")));
+    Exceptions::ThrowByType(Exceptions::kArgumentValue, args);
   }
-  const intptr_t len = Smi::Cast(length).Value();
-  if ((len < 0) || (len > Array::kMaxElements)) {
-    const String& error = String::Handle(String::NewFormatted(
-        "Length (%" Pd ") must be an integer in the range [0..%" Pd "].",
-        len, Array::kMaxElements));
-    Exceptions::ThrowArgumentError(error);
+  if (length.IsSmi()) {
+    const intptr_t len = Smi::Cast(length).Value();
+    if ((len >= 0) && (len <= Array::kMaxElements)) {
+      Heap::Space space = isolate->heap()->SpaceForAllocation(kArrayCid);
+      const Array& array = Array::Handle(Array::New(len, space));
+      arguments.SetReturn(array);
+      TypeArguments& element_type =
+          TypeArguments::CheckedHandle(arguments.ArgAt(1));
+      // An Array is raw or takes one type argument. However, its type argument
+      // vector may be longer than 1 due to a type optimization reusing the type
+      // argument vector of the instantiator.
+      ASSERT(element_type.IsNull() ||
+             ((element_type.Length() >= 1) && element_type.IsInstantiated()));
+      array.SetTypeArguments(element_type);  // May be null.
+      return;
+    }
   }
-
-  Heap::Space space = isolate->heap()->SpaceForAllocation(kArrayCid);
-  const Array& array = Array::Handle(Array::New(len, space));
-  arguments.SetReturn(array);
-  TypeArguments& element_type =
-      TypeArguments::CheckedHandle(arguments.ArgAt(1));
-  // An Array is raw or takes one type argument. However, its type argument
-  // vector may be longer than 1 due to a type optimization reusing the type
-  // argument vector of the instantiator.
-  ASSERT(element_type.IsNull() ||
-         ((element_type.Length() >= 1) && element_type.IsInstantiated()));
-  array.SetTypeArguments(element_type);  // May be null.
+  // Throw: new RangeError.range(length, 0, Array::kMaxElements, "length");
+  const Array& args = Array::Handle(Array::New(4));
+  args.SetAt(0, length);
+  args.SetAt(1, Integer::Handle(Integer::New(0)));
+  args.SetAt(2, Integer::Handle(Integer::New(Array::kMaxElements)));
+  args.SetAt(3, Symbols::Length());
+  Exceptions::ThrowByType(Exceptions::kRangeRange, args);
 }
 
 
@@ -1053,23 +1061,72 @@ DEFINE_RUNTIME_ENTRY(InvokeNoSuchMethodDispatcher, 4) {
   // a zigzagged lookup to see if this call failed because of an arity mismatch,
   // need for conversion, or there really is no such method.
 
+#define NO_SUCH_METHOD()                                                       \
+  const Object& result = Object::Handle(                                       \
+      DartEntry::InvokeNoSuchMethod(receiver,                                  \
+                                    target_name,                               \
+                                    orig_arguments,                            \
+                                    orig_arguments_desc));                     \
+  CheckResultError(result);                                                    \
+  arguments.SetReturn(result);                                                 \
+
+#define CLOSURIZE(some_function)                                               \
+  const Function& closure_function =                                           \
+      Function::Handle(some_function.ImplicitClosureFunction());               \
+  const Object& result =                                                       \
+      Object::Handle(closure_function.ImplicitInstanceClosure(receiver));      \
+  arguments.SetReturn(result);                                                 \
+
   const bool is_getter = Field::IsGetterName(target_name);
   if (is_getter) {
-    // o.foo failed, closurize o.foo() if it exists
-    const String& field_name =
-      String::Handle(Field::NameFromGetter(target_name));
+    // o.foo (o.get:foo) failed, closurize o.foo() if it exists. Or,
+    // o#foo (o.get:#foo) failed, closurizee o.foo or o.foo(), whichever is
+    // encountered first on the inheritance chain. Or,
+    // o#foo= (o.get:#set:foo) failed, closurize o.foo= if it exists.
+    String& field_name =
+        String::Handle(Field::NameFromGetter(target_name));
+
+    const bool is_extractor = field_name.CharAt(0) == '#';
+    if (is_extractor) {
+      field_name = String::SubString(field_name, 1);
+      ASSERT(!Field::IsGetterName(field_name));
+      field_name = Symbols::New(field_name);
+
+      if (!Field::IsSetterName(field_name)) {
+        const String& getter_name =
+            String::Handle(Field::GetterName(field_name));
+
+        // Zigzagged lookup: closure either a regular method or a getter.
+        while (!cls.IsNull()) {
+          function ^= cls.LookupDynamicFunction(field_name);
+          if (!function.IsNull()) {
+            CLOSURIZE(function);
+            return;
+          }
+          function ^= cls.LookupDynamicFunction(getter_name);
+          if (!function.IsNull()) {
+            CLOSURIZE(function);
+            return;
+          }
+          cls = cls.SuperClass();
+        }
+        NO_SUCH_METHOD();
+        return;
+      } else {
+        // Fall through for non-ziggaged lookup for o#foo=.
+      }
+    }
+
     while (!cls.IsNull()) {
       function ^= cls.LookupDynamicFunction(field_name);
       if (!function.IsNull()) {
-        const Function& closure_function =
-            Function::Handle(function.ImplicitClosureFunction());
-        const Object& result =
-            Object::Handle(closure_function.ImplicitInstanceClosure(receiver));
-        arguments.SetReturn(result);
+        CLOSURIZE(function);
         return;
       }
       cls = cls.SuperClass();
     }
+
+    // Fall through for noSuchMethod
   } else {
     // o.foo(...) failed, invoke noSuchMethod is foo exists but has the wrong
     // number of arguments, or try (o.foo).call(...)
@@ -1116,14 +1173,10 @@ DEFINE_RUNTIME_ENTRY(InvokeNoSuchMethodDispatcher, 4) {
     }
   }
 
-  // Handle noSuchMethod invocation.
-  const Object& result = Object::Handle(
-      DartEntry::InvokeNoSuchMethod(receiver,
-                                    target_name,
-                                    orig_arguments,
-                                    orig_arguments_desc));
-  CheckResultError(result);
-  arguments.SetReturn(result);
+  NO_SUCH_METHOD();
+
+#undef NO_SUCH_METHOD
+#undef CLOSURIZE
 }
 
 
@@ -1299,11 +1352,14 @@ DEFINE_RUNTIME_ENTRY(StackOverflow, 0) {
   }
 
   uword interrupt_bits = isolate->GetAndClearInterrupts();
-  if ((interrupt_bits & Isolate::kStoreBufferInterrupt) != 0) {
-    if (FLAG_verbose_gc) {
-      OS::PrintErr("Scavenge scheduled by store buffer overflow.\n");
+  if ((interrupt_bits & Isolate::kVMInterrupt) != 0) {
+    isolate->thread_registry()->CheckSafepoint();
+    if (isolate->store_buffer()->Overflowed()) {
+      if (FLAG_verbose_gc) {
+        OS::PrintErr("Scavenge scheduled by store buffer overflow.\n");
+      }
+      isolate->heap()->CollectGarbage(Heap::kNew);
     }
-    isolate->heap()->CollectGarbage(Heap::kNew);
   }
   if ((interrupt_bits & Isolate::kMessageInterrupt) != 0) {
     bool ok = isolate->message_handler()->HandleOOBMessages();
@@ -1321,7 +1377,7 @@ DEFINE_RUNTIME_ENTRY(StackOverflow, 0) {
     Debugger::SignalIsolateInterrupted();
 
     Dart_IsolateInterruptCallback callback = isolate->InterruptCallback();
-    if (callback) {
+    if (callback != NULL) {
       if ((*callback)()) {
         return;
       } else {
@@ -1508,7 +1564,7 @@ DEFINE_RUNTIME_ENTRY(FixAllocationStubTarget, 0) {
   alloc_class ^= stub.owner();
   Code& alloc_stub = Code::Handle(isolate, alloc_class.allocation_stub());
   if (alloc_stub.IsNull()) {
-    alloc_stub = isolate->stub_code()->GetAllocationStubForClass(alloc_class);
+    alloc_stub = StubCode::GetAllocationStubForClass(alloc_class);
     ASSERT(!CodePatcher::IsEntryPatched(alloc_stub));
   }
   const Instructions& instrs =
@@ -1631,9 +1687,10 @@ static void CopySavedRegisters(uword saved_registers_address,
 // Returns the stack size of unoptimized frame.
 DEFINE_LEAF_RUNTIME_ENTRY(intptr_t, DeoptimizeCopyFrame,
                           1, uword saved_registers_address) {
-  Isolate* isolate = Isolate::Current();
-  StackZone zone(isolate);
-  HANDLESCOPE(isolate);
+  Thread* thread = Thread::Current();
+  Isolate* isolate = thread->isolate();
+  StackZone zone(thread);
+  HANDLESCOPE(thread);
 
   // All registers have been saved below last-fp as if they were locals.
   const uword last_fp = saved_registers_address
@@ -1669,9 +1726,10 @@ END_LEAF_RUNTIME_ENTRY
 // The stack has been adjusted to fit all values for unoptimized frame.
 // Fill the unoptimized frame.
 DEFINE_LEAF_RUNTIME_ENTRY(void, DeoptimizeFillFrame, 1, uword last_fp) {
-  Isolate* isolate = Isolate::Current();
-  StackZone zone(isolate);
-  HANDLESCOPE(isolate);
+  Thread* thread = Thread::Current();
+  Isolate* isolate = thread->isolate();
+  StackZone zone(thread);
+  HANDLESCOPE(thread);
 
   DeoptContext* deopt_context = isolate->deopt_context();
   DartFrameIterator iterator(last_fp);
@@ -1728,9 +1786,9 @@ DEFINE_LEAF_RUNTIME_ENTRY(intptr_t,
                           2,
                           RawBigint* left,
                           RawBigint* right) {
-  Isolate* isolate = Isolate::Current();
-  StackZone zone(isolate);
-  HANDLESCOPE(isolate);
+  Thread* thread = Thread::Current();
+  StackZone zone(thread);
+  HANDLESCOPE(thread);
   const Bigint& big_left = Bigint::Handle(left);
   const Bigint& big_right = Bigint::Handle(right);
   return big_left.CompareWith(big_right);

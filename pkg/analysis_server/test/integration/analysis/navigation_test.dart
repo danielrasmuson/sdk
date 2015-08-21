@@ -8,9 +8,11 @@ import 'package:analysis_server/src/protocol.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
+import '../../utils.dart';
 import '../integration_tests.dart';
 
 main() {
+  initializeTestEnvironment();
   defineReflectiveTests(AnalysisNavigationTest);
 }
 
@@ -54,7 +56,9 @@ part of foo;
 ''';
     writeFile(pathname2, text2);
     standardAnalysisSetup();
-    sendAnalysisSetSubscriptions({AnalysisService.NAVIGATION: [pathname1]});
+    sendAnalysisSetSubscriptions({
+      AnalysisService.NAVIGATION: [pathname1]
+    });
     List<NavigationRegion> regions;
     List<NavigationTarget> targets;
     List<String> targetFiles;
@@ -100,11 +104,13 @@ part of foo;
       // as a navigation target?
       checkLocal('Class<int>', 'Class<TypeParameter>', ElementKind.CLASS);
       checkRemote(
-          "part 'test2.dart';", r'test2.dart$', ElementKind.COMPILATION_UNIT);
-      checkLocal('Class<int>.constructor',
+          "'test2.dart';", r'test2.dart$', ElementKind.COMPILATION_UNIT);
+      checkLocal(
+          'Class<int>.constructor',
           'constructor(); /* constructor declaration */',
           ElementKind.CONSTRUCTOR);
-      checkLocal('constructor(); // usage',
+      checkLocal(
+          'constructor(); // usage',
           'constructor(); /* constructor declaration */',
           ElementKind.CONSTRUCTOR);
       checkLocal('field;', 'field;', ElementKind.FIELD);
@@ -113,7 +119,7 @@ part of foo;
       checkLocal('FunctionTypeAlias parameter', 'FunctionTypeAlias();',
           ElementKind.FUNCTION_TYPE_ALIAS);
       checkLocal('field)', 'field;', ElementKind.GETTER);
-      checkRemote("import 'dart:async'", r'async\.dart$', ElementKind.LIBRARY);
+      checkRemote("'dart:async'", r'async\.dart$', ElementKind.LIBRARY);
       checkLocal(
           'localVariable.field', 'localVariable =', ElementKind.LOCAL_VARIABLE);
       checkLocal('method();', 'method() {', ElementKind.METHOD);

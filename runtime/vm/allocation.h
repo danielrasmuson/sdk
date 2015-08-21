@@ -70,12 +70,10 @@ class StackResource {
   // The thread that owns this resource.
   Thread* thread() const { return thread_; }
 
-  // Destroy stack resources of isolate until top exit frame.
-  // TODO(koda): Migrate to Thread.
-  static void Unwind(Isolate* isolate) { UnwindAbove(isolate, NULL); }
-  // TODO(koda): Migrate to Thread.
-  // Destroy stack resources of isolate above new_top, exclusive.
-  static void UnwindAbove(Isolate* isolate, StackResource* new_top);
+  // Destroy stack resources of thread until top exit frame.
+  static void Unwind(Thread* thread) { UnwindAbove(thread, NULL); }
+  // Destroy stack resources of thread above new_top, exclusive.
+  static void UnwindAbove(Thread* thread, StackResource* new_top);
 
  private:
   void Init(Thread* thread) {
@@ -135,6 +133,27 @@ class ZoneAllocated {
  private:
   DISALLOW_COPY_AND_ASSIGN(ZoneAllocated);
 };
+
+
+
+// Within a NoSafepointScope, the thread must not reach any safepoint. Used
+// around code that manipulates raw object pointers directly without handles.
+#if defined(DEBUG)
+class NoSafepointScope : public StackResource {
+ public:
+  NoSafepointScope();
+  ~NoSafepointScope();
+ private:
+  DISALLOW_COPY_AND_ASSIGN(NoSafepointScope);
+};
+#else  // defined(DEBUG)
+class NoSafepointScope : public ValueObject {
+ public:
+  NoSafepointScope() {}
+ private:
+  DISALLOW_COPY_AND_ASSIGN(NoSafepointScope);
+};
+#endif  // defined(DEBUG)
 
 }  // namespace dart
 

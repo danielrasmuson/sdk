@@ -88,14 +88,20 @@ class StoreBuffer {
   // Partially filled blocks can be reused, and there is an "inifite" supply
   // of empty blocks (reused or newly allocated). In any case, the caller
   // takes ownership of the returned block.
-  StoreBufferBlock* PopBlock();
+  StoreBufferBlock* PopNonFullBlock();
   StoreBufferBlock* PopEmptyBlock();
+  StoreBufferBlock* PopNonEmptyBlock();
 
   // Pops and returns all non-empty blocks as a linked list (owned by caller).
   StoreBufferBlock* Blocks();
 
   // Discards the contents of this store buffer.
   void Reset();
+
+  // Check whether non-empty blocks have exceeded kMaxNonEmpty.
+  bool Overflowed();
+
+  bool IsEmpty();
 
  private:
   class List {
@@ -112,10 +118,6 @@ class StoreBuffer {
     intptr_t length_;
     DISALLOW_COPY_AND_ASSIGN(List);
   };
-
-  // Check if we run over the max number of deduplication sets.
-  // If we did schedule an interrupt.
-  void CheckThresholdNonEmpty();
 
   // If needed, trims the the global cache of empty blocks.
   static void TrimGlobalEmpty();

@@ -337,13 +337,13 @@ class FlowGraphCompiler : public ValueObject {
                            LocationSummary* locs);
 
   void GenerateCall(intptr_t token_pos,
-                    const ExternalLabel* label,
+                    const StubEntry& stub_entry,
                     RawPcDescriptors::Kind kind,
                     LocationSummary* locs);
 
   void GenerateDartCall(intptr_t deopt_id,
                         intptr_t token_pos,
-                        const ExternalLabel* label,
+                        const StubEntry& stub_entry,
                         RawPcDescriptors::Kind kind,
                         LocationSummary* locs);
 
@@ -393,14 +393,14 @@ class FlowGraphCompiler : public ValueObject {
   static int32_t EdgeCounterIncrementSizeInBytes();
 #endif  // !TARGET_ARCH_ARM64 && !TARGET_ARCH_MIPS
 
-  void EmitOptimizedInstanceCall(ExternalLabel* target_label,
+  void EmitOptimizedInstanceCall(const StubEntry& stub_entry,
                                  const ICData& ic_data,
                                  intptr_t argument_count,
                                  intptr_t deopt_id,
                                  intptr_t token_pos,
                                  LocationSummary* locs);
 
-  void EmitInstanceCall(ExternalLabel* target_label,
+  void EmitInstanceCall(const StubEntry& stub_entry,
                         const ICData& ic_data,
                         intptr_t argument_count,
                         intptr_t deopt_id,
@@ -539,6 +539,8 @@ class FlowGraphCompiler : public ValueObject {
 
   RawArray* InliningIdToFunction() const;
 
+  RawArray* CallerInliningIdMap() const;
+
  private:
   friend class CheckStackOverflowSlowPath;  // For pending_deoptimization_env_.
 
@@ -660,6 +662,17 @@ class FlowGraphCompiler : public ValueObject {
   void FrameStateClear();
 #endif
 
+  // This struct contains either function or code, the other one being NULL.
+  struct StaticCallsStruct {
+    intptr_t offset;
+    const Function* function;  // Can be NULL.
+    const Code* code;          // Can be NULL.
+    StaticCallsStruct(intptr_t offset_arg,
+                      const Function* function_arg,
+                      const Code* code_arg)
+        : offset(offset_arg), function(function_arg), code(code_arg) {}
+  };
+
   Isolate* isolate_;
   Zone* zone_;
   Assembler* assembler_;
@@ -681,11 +694,10 @@ class FlowGraphCompiler : public ValueObject {
   GrowableArray<BlockInfo*> block_info_;
   GrowableArray<CompilerDeoptInfo*> deopt_infos_;
   GrowableArray<SlowPathCode*> slow_path_code_;
-  // Stores: [code offset, function or null, null(code)].
   // Stores static call targets as well as stub targets.
   // TODO(srdjan): Evaluate if we should store allocation stub targets into a
   // separate table?
-  const GrowableObjectArray& static_calls_target_table_;
+  GrowableArray<StaticCallsStruct> static_calls_target_table_;
   const bool is_optimizing_;
   // Set to true if optimized code has IC calls.
   bool may_reoptimize_;

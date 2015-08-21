@@ -11,9 +11,10 @@ import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
 import '../../abstract_context.dart';
+import '../../utils.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(CompletionTargetTest);
 }
 
@@ -136,6 +137,16 @@ class CompletionTargetTest extends AbstractContextTest {
     // Block
     addTestSource('main() {^}');
     assertTarget('}', '{}');
+  }
+
+  test_Block_keyword() {
+    addTestSource('class C { static C get instance => null; } main() {C.in^}');
+    assertTarget('in', 'C.in');
+  }
+
+  test_Block_keyword2() {
+    addTestSource('class C { static C get instance => null; } main() {C.i^n}');
+    assertTarget('in', 'C.in');
   }
 
   test_FormalParameter_partialType() {
@@ -496,6 +507,30 @@ class C2 {
     // MethodDeclaration  ClassDeclaration  CompilationUnit
     addTestSource('class C2 {/** */^ zoo(z) { } String name; }');
     assertTarget('zoo', 'zoo(z) {}');
+  }
+
+  test_SwitchStatement_c() {
+    // Token('c') SwitchStatement
+    addTestSource('main() { switch(x) {c^} }');
+    assertTarget('}', 'switch (x) {}');
+  }
+
+  test_SwitchStatement_c2() {
+    // Token('c') SwitchStatement
+    addTestSource('main() { switch(x) { c^ } }');
+    assertTarget('}', 'switch (x) {}');
+  }
+
+  test_SwitchStatement_empty() {
+    // SwitchStatement
+    addTestSource('main() { switch(x) {^} }');
+    assertTarget('}', 'switch (x) {}');
+  }
+
+  test_SwitchStatement_empty2() {
+    // SwitchStatement
+    addTestSource('main() { switch(x) { ^ } }');
+    assertTarget('}', 'switch (x) {}');
   }
 
   test_TypeArgumentList() {

@@ -3,16 +3,11 @@ library dart2js.unsugar_cps;
 import '../../cps_ir/cps_ir_nodes.dart';
 
 import '../../cps_ir/optimizers.dart' show ParentVisitor;
-import '../../constants/expressions.dart';
 import '../../constants/values.dart';
-import '../../elements/elements.dart' show
-    ClassElement,
-    FieldElement,
-    FunctionElement,
-    Local,
-    ExecutableElement;
+import '../../elements/elements.dart';
+import '../../io/source_information.dart';
 import '../../js_backend/codegen/glue.dart';
-import '../../dart2jslib.dart' show Selector, World;
+import '../../universe/universe.dart' show Selector;
 import '../../cps_ir/cps_ir_builder.dart' show ThisParameterLocal;
 
 class ExplicitReceiverParameterEntity implements Local {
@@ -21,6 +16,16 @@ class ExplicitReceiverParameterEntity implements Local {
   ExplicitReceiverParameterEntity(this.executableContext);
   toString() => 'ExplicitReceiverParameterEntity($executableContext)';
 }
+
+/// Suggested name for an interceptor.
+class InterceptorEntity extends Entity {
+  Entity interceptedVariable;
+
+  InterceptorEntity(this.interceptedVariable);
+
+  String get name => interceptedVariable.name + '_';
+}
+
 
 /// Rewrites the initial CPS IR to make Dart semantics explicit and inserts
 /// special nodes that respect JavaScript behavior.
@@ -37,6 +42,8 @@ class UnsugarVisitor extends RecursiveVisitor {
 
   Parameter thisParameter;
   Parameter explicitReceiverParameter;
+
+  Map<Primitive, Interceptor> interceptors = <Primitive, Interceptor>{};
 
   // In a catch block, rethrow implicitly throws the block's exception
   // parameter.  This is the exception parameter when nested in a catch
@@ -73,12 +80,6 @@ class UnsugarVisitor extends RecursiveVisitor {
     }
 
     visit(function);
-  }
-
-  @override
-  visit(Node node) {
-    Node result = node.accept(this);
-    return result != null ? result : node;
   }
 
   Constant get trueConstant {
@@ -127,7 +128,8 @@ class UnsugarVisitor extends RecursiveVisitor {
     Primitive nullPrimitive = nullConstant;
     Primitive test = new ApplyBuiltinOperator(
         BuiltinOperator.Identical,
-          <Primitive>[function.parameters.single, nullPrimitive]);
+          <Primitive>[function.parameters.single, nullPrimitive],
+          function.parameters.single.sourceInformation);
 
     Expression newBody =
         new LetCont.many(<Continuation>[returnFalse, originalBody],
@@ -158,8 +160,8 @@ class UnsugarVisitor extends RecursiveVisitor {
     Selector selector = new Selector.fromElement(function);
     // TODO(johnniwinther): Come up with an implementation of SourceInformation
     // for calls such as this one that don't appear in the original source.
-    InvokeStatic invoke =
-        new InvokeStatic(function, selector, arguments, continuation, null);
+    InvokeStatic invoke = new InvokeStatic(
+        function, selector, arguments, continuation, null);
     _parentVisitor.processInvokeStatic(invoke);
 
     LetCont letCont = new LetCont(continuation, invoke);
@@ -169,7 +171,11 @@ class UnsugarVisitor extends RecursiveVisitor {
     letCont.parent = parent;
   }
 
-  processLetHandler(LetHandler node) {
+  @override
+  Expression traverseLetHandler(LetHandler node) {
+    assert(node.handler.parameters.length == 2);
+    Parameter previousExceptionParameter = _exceptionParameter;
+
     // BEFORE: Handlers have two parameters, exception and stack trace.
     // AFTER: Handlers have a single parameter, which is unwrapped to get
     // the exception and stack trace.
@@ -193,18 +199,11 @@ class UnsugarVisitor extends RecursiveVisitor {
 
     assert(stackTraceParameter.hasNoUses);
     node.handler.parameters.removeLast();
-  }
 
-  @override
-  visitLetHandler(LetHandler node) {
-    assert(node.handler.parameters.length == 2);
-    Parameter previousExceptionParameter = _exceptionParameter;
-    _exceptionParameter = node.handler.parameters.first;
-    processLetHandler(node);
     visit(node.handler);
     _exceptionParameter = previousExceptionParameter;
 
-    visit(node.body);
+    return node.body;
   }
 
   processThrow(Throw node) {
@@ -227,6 +226,34 @@ class UnsugarVisitor extends RecursiveVisitor {
     // worry about unlinking.
   }
 
+  /// Returns an interceptor for the given value, capable of responding to
+  /// [selector].
+  ///
+  /// A single getInterceptor call will be created per primitive, bound
+  /// immediately after the primitive is bound.
+  ///
+  /// The type propagation pass will later narrow the set of interceptors
+  /// based on the input type, and the let sinking pass will propagate the
+  /// getInterceptor call closer to its use when this is profitable.
+  Interceptor getInterceptorFor(Primitive prim, Selector selector,
+                                SourceInformation sourceInformation) {
+    assert(prim is! Interceptor);
+    Interceptor interceptor = interceptors[prim];
+    if (interceptor == null) {
+      interceptor = new Interceptor(prim, sourceInformation);
+      interceptors[prim] = interceptor;
+      InteriorNode parent = prim.parent;
+      insertLetPrim(interceptor, parent.body);
+      if (prim.hint != null) {
+        interceptor.hint = new InterceptorEntity(prim.hint);
+      }
+    }
+    // Add the interceptor classes that can respond to the given selector.
+    interceptor.interceptedClasses.addAll(
+        _glue.getInterceptedClassesOn(selector));
+    return interceptor;
+  }
+
   processInvokeMethod(InvokeMethod node) {
     Selector selector = node.selector;
     if (!_glue.isInterceptedSelector(selector)) return;
@@ -240,13 +267,8 @@ class UnsugarVisitor extends RecursiveVisitor {
       //  Change 'receiver.foo()'  to  'this.foo(receiver)'.
       newReceiver = thisParameter;
     } else {
-      // TODO(sra): Move the computation of interceptedClasses to a much later
-      // phase and take into account the remaining uses of the interceptor.
-      Set<ClassElement> interceptedClasses =
-        _glue.getInterceptedClassesOn(selector);
-      _glue.registerSpecializedGetInterceptor(interceptedClasses);
-      newReceiver = new Interceptor(receiver, interceptedClasses);
-      insertLetPrim(newReceiver, node);
+      newReceiver = getInterceptorFor(
+          receiver, node.selector, node.sourceInformation);
     }
 
     node.arguments.insert(0, node.receiver);
@@ -271,10 +293,26 @@ class UnsugarVisitor extends RecursiveVisitor {
     // TODO(karlklose): implement the checked mode part of boolean conversion.
     InteriorNode parent = node.parent;
     IsTrue condition = node.condition;
+
+    // Do not rewrite conditions that are foreign code.
+    // It is redundant, and causes infinite recursion (if not optimized)
+    // in the implementation of identical, which itself contains a condition.
+    Primitive value = condition.value.definition;
+    if (value is Parameter && value.parent is Continuation) {
+      Continuation cont = value.parent;
+      if (cont.hasExactlyOneUse && cont.firstRef.parent is ForeignCode) {
+        ForeignCode foreign = cont.firstRef.parent;
+        if (foreign.type.containsOnlyBool(_glue.classWorld)) {
+          return;
+        }
+      }
+    }
+
     Primitive t = trueConstant;
     Primitive i = new ApplyBuiltinOperator(
         BuiltinOperator.Identical,
-        <Primitive>[condition.value.definition, t]);
+        <Primitive>[condition.value.definition, t],
+        condition.value.definition.sourceInformation);
     LetPrim newNode = new LetPrim(t,
         new LetPrim(i,
             new Branch(new IsTrue(i),

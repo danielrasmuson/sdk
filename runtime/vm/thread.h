@@ -13,12 +13,17 @@ namespace dart {
 
 class CHA;
 class HandleScope;
+class Heap;
+class InterruptableThreadState;
 class Isolate;
+class LongJumpScope;
 class Object;
 class RawBool;
 class RawObject;
 class StackResource;
+class TimelineEventBlock;
 class Zone;
+
 
 // List of VM-global objects/addresses cached in each Thread object.
 #define CACHED_VM_OBJECTS_LIST(V)                                              \
@@ -28,12 +33,32 @@ class Zone;
 
 #define CACHED_ADDRESSES_LIST(V)                                               \
   V(uword, update_store_buffer_entry_point_,                                   \
-    StubCode::UpdateStoreBufferEntryPoint(), 0)
+    StubCode::UpdateStoreBuffer_entry()->EntryPoint(), 0)
 
 #define CACHED_CONSTANTS_LIST(V)                                               \
   CACHED_VM_OBJECTS_LIST(V)                                                    \
   CACHED_ADDRESSES_LIST(V)
 
+struct InterruptedThreadState {
+  ThreadId tid;
+  uintptr_t pc;
+  uintptr_t csp;
+  uintptr_t dsp;
+  uintptr_t fp;
+  uintptr_t lr;
+};
+
+// When a thread is interrupted the thread specific interrupt callback will be
+// invoked. Each callback is given an InterruptedThreadState and the user data
+// pointer. When inside a thread interrupt callback doing any of the following
+// is forbidden:
+//   * Accessing TLS -- Because on Windows the callback will be running in a
+//                      different thread.
+//   * Allocating memory -- Because this takes locks which may already be held,
+//                          resulting in a dead lock.
+//   * Taking a lock -- See above.
+typedef void (*ThreadInterruptCallback)(const InterruptedThreadState& state,
+                                        void* data);
 
 // A VM thread; may be executing Dart code or performing helper tasks like
 // garbage collection or compilation. The Thread structure associated with
@@ -117,6 +142,19 @@ class Thread {
     return OFFSET_OF(Thread, state_) + OFFSET_OF(State, top_resource);
   }
 
+  void set_thread_state(InterruptableThreadState* state) {
+    ASSERT((thread_state() == NULL) || (state == NULL));
+    state_.thread_state = state;
+  }
+
+  InterruptableThreadState* thread_state() const {
+    return state_.thread_state;
+  }
+
+  static intptr_t heap_offset() {
+    return OFFSET_OF(Thread, heap_);
+  }
+
   int32_t no_handle_scope_depth() const {
 #if defined(DEBUG)
     return state_.no_handle_scope_depth;
@@ -153,15 +191,42 @@ class Thread {
 #endif
   }
 
+  int32_t no_safepoint_scope_depth() const {
+#if defined(DEBUG)
+    return state_.no_safepoint_scope_depth;
+#else
+    return 0;
+#endif
+  }
+
+  void IncrementNoSafepointScopeDepth() {
+#if defined(DEBUG)
+    ASSERT(state_.no_safepoint_scope_depth < INT_MAX);
+    state_.no_safepoint_scope_depth += 1;
+#endif
+  }
+
+  void DecrementNoSafepointScopeDepth() {
+#if defined(DEBUG)
+    ASSERT(state_.no_safepoint_scope_depth > 0);
+    state_.no_safepoint_scope_depth -= 1;
+#endif
+  }
+
   // Collection of isolate-specific state of a thread that is saved/restored
   // on isolate exit/re-entry.
   struct State {
     Zone* zone;
     uword top_exit_frame_info;
     StackResource* top_resource;
+    TimelineEventBlock* timeline_block;
+    // TODO(koda): Migrate individual fields of InterruptableThreadState.
+    InterruptableThreadState* thread_state;
+    LongJumpScope* long_jump_base;
 #if defined(DEBUG)
     HandleScope* top_handle_scope;
     intptr_t no_handle_scope_depth;
+    int32_t no_safepoint_scope_depth;
 #endif
   };
 
@@ -175,10 +240,37 @@ CACHED_CONSTANTS_LIST(DEFINE_OFFSET_METHOD)
   static bool CanLoadFromThread(const Object& object);
   static intptr_t OffsetFromThread(const Object& object);
 
+  TimelineEventBlock* timeline_block() const {
+    return state_.timeline_block;
+  }
+
+  void set_timeline_block(TimelineEventBlock* block) {
+    state_.timeline_block = block;
+  }
+
+  LongJumpScope* long_jump_base() const { return state_.long_jump_base; }
+  void set_long_jump_base(LongJumpScope* value) {
+    state_.long_jump_base = value;
+  }
+
+  ThreadId id() const {
+    ASSERT(id_ != OSThread::kInvalidThreadId);
+    return id_;
+  }
+
+  void SetThreadInterrupter(ThreadInterruptCallback callback, void* data);
+
+  bool IsThreadInterrupterEnabled(ThreadInterruptCallback* callback,
+                                  void** data) const;
+
  private:
   static ThreadLocalKey thread_key_;
 
+  const ThreadId id_;
+  ThreadInterruptCallback thread_interrupt_callback_;
+  void* thread_interrupt_data_;
   Isolate* isolate_;
+  Heap* heap_;
   State state_;
   StoreBufferBlock* store_buffer_block_;
 #define DECLARE_MEMBERS(type_name, member_name, expr, default_init_value)      \
@@ -194,6 +286,9 @@ CACHED_CONSTANTS_LIST(DECLARE_MEMBERS)
     memset(&state_, 0, sizeof(state_));
   }
 
+  void StoreBufferRelease(bool check_threshold = true);
+  void StoreBufferAcquire();
+
   void set_zone(Zone* zone) {
     state_.zone = zone;
   }
@@ -207,8 +302,10 @@ CACHED_CONSTANTS_LIST(DECLARE_MEMBERS)
   void Schedule(Isolate* isolate);
   void Unschedule();
 
+  friend class ApiZone;
   friend class Isolate;
   friend class StackZone;
+  friend class ThreadRegistry;
   DISALLOW_COPY_AND_ASSIGN(Thread);
 };
 

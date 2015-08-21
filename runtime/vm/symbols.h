@@ -103,11 +103,16 @@ class ObjectPointerVisitor;
   V(YieldKw, "yield")                                                          \
   V(AsyncCompleter, ":async_completer")                                        \
   V(AsyncOperation, ":async_op")                                               \
+  V(AsyncThenCallback, ":async_op_then")                                       \
+  V(AsyncCatchErrorCallback, ":async_op_catch_error")                          \
   V(AsyncOperationParam, ":async_result")                                      \
   V(AsyncOperationErrorParam, ":async_error_param")                            \
   V(AsyncOperationStackTraceParam, ":async_stack_trace_param")                 \
   V(AsyncSavedTryCtxVarPrefix, ":async_saved_try_ctx_var_")                    \
   V(AsyncCatchHelper, "_asyncCatchHelper")                                     \
+  V(AsyncThenWrapperHelper, "_asyncThenWrapperHelper")                         \
+  V(AsyncErrorWrapperHelper, "_asyncErrorWrapperHelper")                       \
+  V(AsyncAwaitHelper, "_awaitHelper")                                          \
   V(Await, "await")                                                            \
   V(AwaitContextVar, ":await_ctx_var")                                         \
   V(AwaitJumpVar, ":await_jump_var")                                           \
@@ -119,7 +124,7 @@ class ObjectPointerVisitor;
   V(Completer, "Completer")                                                    \
   V(CompleterComplete, "complete")                                             \
   V(CompleterCompleteError, "completeError")                                   \
-  V(CompleterConstructor, "Completer.")                                        \
+  V(CompleterSyncConstructor, "Completer.sync")                                \
   V(CompleterFuture, "future")                                                 \
   V(StreamIterator, "StreamIterator")                                          \
   V(StreamIteratorConstructor, "StreamIterator.")                              \
@@ -291,6 +296,7 @@ class ObjectPointerVisitor;
   V(RangeError, "RangeError")                                                  \
   V(DotRange, ".range")                                                        \
   V(ArgumentError, "ArgumentError")                                            \
+  V(DotValue, ".value")                                                        \
   V(FormatException, "FormatException")                                        \
   V(UnsupportedError, "UnsupportedError")                                      \
   V(StackOverflowError, "StackOverflowError")                                  \
@@ -389,6 +395,8 @@ class ObjectPointerVisitor;
   V(last, "last")                                                              \
   V(removeLast, "removeLast")                                                  \
   V(add, "add")                                                                \
+  V(ConstructorClosurePrefix, "new#")                                          \
+  V(_scheduleExtension, "_scheduleExtension")                                  \
 
 
 // Contains a list of frequently used strings in a canonicalized form. This
@@ -502,6 +510,9 @@ class Symbols : public AllStatic {
   }
   static const String& At() {
     return *(symbol_handles_[kNullCharId + '@']);
+  }
+  static const String& HashMark() {
+    return *(symbol_handles_[kNullCharId + '#']);
   }
   static const String& Semicolon() {
     return *(symbol_handles_[kNullCharId + ';']);

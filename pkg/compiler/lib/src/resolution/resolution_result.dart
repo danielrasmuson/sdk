@@ -2,7 +2,14 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-part of resolution;
+library dart2js.resolution.result;
+
+import '../constants/expressions.dart';
+import '../dart_types.dart';
+import '../elements/elements.dart';
+import '../tree/tree.dart';
+import '../universe/universe.dart' show
+    CallStructure;
 
 enum ResultKind {
   NONE,
@@ -10,6 +17,7 @@ enum ResultKind {
   TYPE,
   ASSERT,
   CONSTANT,
+  PREFIX,
 }
 
 /// The result of resolving a node.
@@ -30,13 +38,32 @@ abstract class ResolutionResult {
   bool get isConstant => false;
 }
 
+/// The prefix of top level or member access, like `prefix.member`,
+/// `prefix.Class.member` or `Class.member`.
+class PrefixResult extends ResolutionResult {
+  final PrefixElement prefix;
+  final ClassElement cls;
+
+  PrefixResult(this.prefix, this.cls);
+
+  Element get element => cls != null ? cls : prefix;
+
+  bool get isDeferred => prefix != null && prefix.isDeferred;
+
+  ResultKind get kind => ResultKind.PREFIX;
+
+  String toString() => 'PrefixResult($prefix,$cls)';
+}
+
 /// The result for the resolution of a node that points to an [Element].
 class ElementResult extends ResolutionResult {
   final Element element;
 
   ResultKind get kind => ResultKind.ELEMENT;
 
-  ElementResult(this.element);
+  ElementResult(this.element) {
+    assert(element != null);
+  }
 
   String toString() => 'ElementResult($element)';
 }

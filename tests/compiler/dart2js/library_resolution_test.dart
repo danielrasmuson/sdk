@@ -17,11 +17,12 @@ import "package:async_helper/async_helper.dart";
 import 'package:expect/expect.dart' show
     Expect;
 
+import 'package:compiler/src/diagnostics/messages.dart' show
+    MessageKind,
+    MessageTemplate;
+
 import 'package:compiler/src/elements/elements.dart' show
     LibraryElement;
-
-import 'package:compiler/src/dart2jslib.dart' show
-    MessageKind;
 
 import 'package:compiler/src/null_compiler_output.dart' show
     NullCompilerOutput;
@@ -92,7 +93,7 @@ main() {
   }
 
   String expectedMessage =
-      MessageKind.LIBRARY_NOT_FOUND.message(
+      MessageTemplate.TEMPLATES[MessageKind.LIBRARY_NOT_FOUND].message(
           {'resolvedUri': 'dart:mock2.dart'}).computeMessage();
 
   int actualMessageCount = 0;

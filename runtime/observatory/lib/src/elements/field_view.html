@@ -24,6 +24,7 @@
 
     <div class="content">
       <h1>
+        field
         <template if="{{ field.isStatic }}">static</template>
         <template if="{{ field.isFinal }}">final</template>
         <template if="{{ field.isConst }}">const</template>
@@ -36,6 +37,10 @@
         </template>
         {{ field.name }}
       </h1>
+
+      <object-common object="{{ field }}"></object-common>
+      <br>
+
       <div class="memberList">
         <div class="memberItem">
           <div class="memberName">owner</div>
@@ -83,6 +88,15 @@
         </template>
       </div>
     </div>
+
+    <div class="content-centered-big">
+      <hr>
+      <script-inset script="{{ field.location.script }}"
+                    startPos="{{ field.location.tokenPos }}"
+                    endPos="{{ field.location.tokenPos }}">
+      </script-inset>
+    </div>
+
     <view-footer></view-footer>
   </template>
 </polymer-element>

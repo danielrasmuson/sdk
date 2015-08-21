@@ -7,6 +7,7 @@ import "package:expect/expect.dart";
 import "package:async_helper/async_helper.dart";
 import 'package:compiler/src/types/types.dart';
 import 'package:compiler/src/inferrer/concrete_types_inferrer.dart';
+import 'package:compiler/src/universe/universe.dart' show Selector;
 
 import "compiler_helper.dart";
 import "type_mask_test_helper.dart";
@@ -158,6 +159,7 @@ Future<AnalysisResult> analyze(String code, {int maxConcreteTypeSize: 1000}) {
   MockCompiler compiler = new MockCompiler.internal(
       enableConcreteTypeInference: true,
       maxConcreteTypeSize: maxConcreteTypeSize);
+  compiler.diagnosticHandler = createHandler(compiler, code);
   compiler.registerSource(uri, code);
   compiler.typesTask.concreteTypesInferrer.testMode = true;
   return compiler.runCompiler(uri).then((_) {
@@ -1452,7 +1454,7 @@ testJsCall() {
     final expectedEType = [result.int];
     result.checkNodeHasType('e', expectedEType);
     result.checkNodeHasType('eNull', maybe(expectedEType));
-    final expectedFType = [result.double];
+    final expectedFType = [result.num];
     result.checkNodeHasType('f', expectedFType);
     result.checkNodeHasType('fNull', maybe(expectedFType));
     final expectedGType = [result.num];
@@ -1646,7 +1648,7 @@ testSelectors() {
     ClassElement y = findElement(result.compiler, 'Y');
     ClassElement z = findElement(result.compiler, 'Z');
 
-    Selector foo = new Selector.call("foo", null, 0);
+    Selector foo = new Selector.call(const PublicName("foo"), 0);
 
     result.checkSelectorHasType(
         foo,
@@ -1672,7 +1674,8 @@ testSelectors() {
         new TypeMask.unionOf([b, c].map((cls) =>
             new TypeMask.nonNullExact(cls, world)), world));
 
-    result.checkSelectorHasType(new Selector.call("bar", null, 0), null, null);
+    result.checkSelectorHasType(
+        new Selector.call(const PublicName("bar"), 0), null, null);
   });
 }
 

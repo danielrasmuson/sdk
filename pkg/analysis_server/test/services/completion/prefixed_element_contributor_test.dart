@@ -12,10 +12,11 @@ import 'package:analysis_server/src/services/completion/prefixed_element_contrib
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:unittest/unittest.dart';
 
+import '../../utils.dart';
 import 'completion_test_util.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(PrefixedElementContributorTest);
 }
 
@@ -216,6 +217,13 @@ void f(C<int> c) {
     });
   }
 
+  test_keyword() {
+    addTestSource('class C { static C get instance => null; } main() {C.in^}');
+    return computeFull((bool result) {
+      assertSuggestGetter('instance', 'C');
+    });
+  }
+
   test_libraryPrefix() {
     // SimpleIdentifier  PrefixedIdentifier  ExpressionStatement
     addTestSource('import "dart:async" as bar; foo() {bar.^}');
@@ -233,12 +241,32 @@ void f(C<int> c) {
     });
   }
 
+  test_libraryPrefix3() {
+    // SimpleIdentifier  MethodInvocation  ExpressionStatement
+    addTestSource('import "dart:async" as bar; foo() {new bar.F^ print("f")}');
+    return computeFull((bool result) {
+      assertSuggestConstructor('Future');
+      assertSuggestConstructor('Future.delayed');
+    });
+  }
+
   test_libraryPrefix_deferred() {
     // SimpleIdentifier  PrefixedIdentifier  ExpressionStatement
     addTestSource('import "dart:async" deferred as bar; foo() {bar.^}');
     return computeFull((bool result) {
       assertSuggestClass('Future');
-      assertSuggestFunction('loadLibrary', 'void');
+      assertSuggestFunction('loadLibrary', 'Future<dynamic>');
+    });
+  }
+
+  test_libraryPrefix_with_exports() {
+    addSource('/libA.dart', 'library libA; class A { }');
+    addSource('/libB.dart', 'library libB; export "/libA.dart"; class B { }');
+    addTestSource('import "/libB.dart" as foo; main() {foo.^} class C { }');
+    computeFast();
+    return computeFull((bool result) {
+      assertSuggestClass('B');
+      assertSuggestClass('A');
     });
   }
 

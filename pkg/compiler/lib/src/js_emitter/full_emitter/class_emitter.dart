@@ -193,14 +193,15 @@ class ClassEmitter extends CodeEmitterHelper {
   void emitCheckedClassSetters(Class cls, ClassBuilder builder) {
     if (cls.onlyForRti) return;
 
-    for (Field field in cls.fields) {
-      if (field.needsCheckedSetter) {
-        assert(!field.needsUncheckedSetter);
-        compiler.withCurrentElement(field.element, () {
-          generateCheckedSetter(
-              field.element, field.name, field.accessorName, builder);
-        });
-      }
+    for (StubMethod method in cls.checkedSetters) {
+      Element member = method.element;
+      assert(member != null);
+      jsAst.Expression code = method.code;
+      jsAst.Name setterName = method.name;
+      compiler.dumpInfoTask.registerElementAst(member,
+          builder.addProperty(setterName, code));
+      generateReflectionDataForFieldGetterOrSetter(
+          member, setterName, builder, isGetter: false);
     }
   }
 
@@ -376,19 +377,6 @@ class ClassEmitter extends CodeEmitterHelper {
                      message: '$previousName != ${memberName}'));
   }
 
-  void generateCheckedSetter(Element member,
-                             jsAst.Name fieldName,
-                             jsAst.Name accessorName,
-                             ClassBuilder builder) {
-    jsAst.Expression code = backend.generatedCode[member];
-    assert(code != null);
-    jsAst.Name setterName = namer.deriveSetterName(accessorName);
-    compiler.dumpInfoTask.registerElementAst(member,
-        builder.addProperty(setterName, code));
-    generateReflectionDataForFieldGetterOrSetter(
-        member, setterName, builder, isGetter: false);
-  }
-
   void emitGetterForCSP(Element member, jsAst.Name fieldName,
                         jsAst.Name accessorName,
                         ClassBuilder builder) {
@@ -434,8 +422,10 @@ class ClassEmitter extends CodeEmitterHelper {
                                                     ClassBuilder builder,
                                                     {bool isGetter}) {
     Selector selector = isGetter
-        ? new Selector.getter(member.name, member.library)
-        : new Selector.setter(member.name, member.library);
+        ? new Selector.getter(
+            new Name(member.name, member.library))
+        : new Selector.setter(
+            new Name(member.name, member.library, isSetter: true));
     String reflectionName = emitter.getReflectionName(selector, name);
     if (reflectionName != null) {
       var reflectable =

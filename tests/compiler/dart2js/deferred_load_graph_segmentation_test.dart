@@ -7,19 +7,22 @@
 // much be included in the initial download (loaded eagerly).
 
 import 'package:async_helper/async_helper.dart';
-import 'package:compiler/src/dart2jslib.dart';
+import 'package:compiler/src/compiler.dart';
 import 'package:compiler/src/deferred_load.dart';
 import 'package:expect/expect.dart';
 import 'memory_compiler.dart';
 
 void main() {
-  Compiler compiler = compilerFor(MEMORY_SOURCE_FILES);
-  asyncTest(() => compiler.run(Uri.parse('memory:main.dart')).then((_) {
+  asyncTest(() async {
+    CompilationResult result =
+        await runCompiler(memorySourceFiles: MEMORY_SOURCE_FILES);
+    Compiler compiler = result.compiler;
+
     lookupLibrary(name) {
       return compiler.libraryLoader.lookupLibrary(Uri.parse(name));
     }
 
-    var main = compiler.mainApp.find(Compiler.MAIN);
+    var main = compiler.mainFunction;
     Expect.isNotNull(main, "Could not find 'main'");
     compiler.deferredLoadTask.onResolutionComplete(main);
 
@@ -66,7 +69,7 @@ void main() {
     Expect.listEquals([ou_lib4_1], hunksLib4_1);
     Expect.listEquals([ou_lib4_2], hunksLib4_2);
     Expect.equals(hunksToLoad["main"], null);
-  }));
+  });
 }
 
 // The main library imports lib1 and lib2 deferred and use lib1.foo1 and

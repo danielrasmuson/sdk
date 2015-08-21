@@ -2,9 +2,6 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-// This code was auto-generated, is not intended to be edited, and is subject to
-// significant change. Please see the README file for more information.
-
 library engine.testing.element_factory;
 
 import 'dart:collection';
@@ -197,7 +194,8 @@ class ElementFactory {
   }
 
   static ExportElementImpl exportFor(LibraryElement exportedLibrary,
-      [List<NamespaceCombinator> combinators = NamespaceCombinator.EMPTY_LIST]) {
+      [List<NamespaceCombinator> combinators =
+          NamespaceCombinator.EMPTY_LIST]) {
     ExportElementImpl spec = new ExportElementImpl(-1);
     spec.exportedLibrary = exportedLibrary;
     spec.combinators = combinators;
@@ -226,8 +224,9 @@ class ElementFactory {
       setter.setter = true;
       setter.synthetic = true;
       setter.variable = field;
-      setter.parameters =
-          <ParameterElement>[requiredParameter2("_$name", type)];
+      setter.parameters = <ParameterElement>[
+        requiredParameter2("_$name", type)
+      ];
       setter.returnType = VoidTypeImpl.instance;
       setter.type = new FunctionTypeImpl(setter);
       field.setter = setter;
@@ -236,7 +235,8 @@ class ElementFactory {
   }
 
   static FieldFormalParameterElementImpl fieldFormalParameter(
-      Identifier name) => new FieldFormalParameterElementImpl(name);
+          Identifier name) =>
+      new FieldFormalParameterElementImpl(name);
 
   static FunctionElementImpl functionElement(String functionName) =>
       functionElement4(functionName, null, null, null, null);
@@ -245,9 +245,11 @@ class ElementFactory {
           String functionName, ClassElement returnElement) =>
       functionElement3(functionName, returnElement, null, null);
 
-  static FunctionElementImpl functionElement3(String functionName,
-      ClassElement returnElement, List<ClassElement> normalParameters,
-      List<ClassElement> optionalParameters) {
+  static FunctionElementImpl functionElement3(
+      String functionName,
+      ClassElement returnElement,
+      List<TypeDefiningElement> normalParameters,
+      List<TypeDefiningElement> optionalParameters) {
     // We don't create parameter elements because we don't have parameter names
     FunctionElementImpl functionElement =
         new FunctionElementImpl(functionName, 0);
@@ -281,9 +283,12 @@ class ElementFactory {
     return functionElement;
   }
 
-  static FunctionElementImpl functionElement4(String functionName,
-      ClassElement returnElement, List<ClassElement> normalParameters,
-      List<String> names, List<ClassElement> namedParameters) {
+  static FunctionElementImpl functionElement4(
+      String functionName,
+      ClassElement returnElement,
+      List<ClassElement> normalParameters,
+      List<String> names,
+      List<ClassElement> namedParameters) {
     FunctionElementImpl functionElement =
         new FunctionElementImpl(functionName, 0);
     FunctionTypeImpl functionType = new FunctionTypeImpl(functionElement);
@@ -326,14 +331,19 @@ class ElementFactory {
           String functionName, List<ClassElement> normalParameters) =>
       functionElement3(functionName, null, normalParameters, null);
 
-  static FunctionElementImpl functionElement6(String functionName,
-      List<ClassElement> normalParameters,
-      List<ClassElement> optionalParameters) => functionElement3(
+  static FunctionElementImpl functionElement6(
+          String functionName,
+          List<ClassElement> normalParameters,
+          List<ClassElement> optionalParameters) =>
+      functionElement3(
           functionName, null, normalParameters, optionalParameters);
 
-  static FunctionElementImpl functionElement7(String functionName,
-      List<ClassElement> normalParameters, List<String> names,
-      List<ClassElement> namedParameters) => functionElement4(
+  static FunctionElementImpl functionElement7(
+          String functionName,
+          List<ClassElement> normalParameters,
+          List<String> names,
+          List<ClassElement> namedParameters) =>
+      functionElement4(
           functionName, null, normalParameters, names, namedParameters);
 
   static FunctionElementImpl functionElementWithParameters(String functionName,
@@ -384,7 +394,8 @@ class ElementFactory {
 
   static ImportElementImpl importFor(
       LibraryElement importedLibrary, PrefixElement prefix,
-      [List<NamespaceCombinator> combinators = NamespaceCombinator.EMPTY_LIST]) {
+      [List<NamespaceCombinator> combinators =
+          NamespaceCombinator.EMPTY_LIST]) {
     ImportElementImpl spec = new ImportElementImpl(0);
     spec.importedLibrary = importedLibrary;
     spec.prefix = prefix;
@@ -430,8 +441,10 @@ class ElementFactory {
     return method;
   }
 
-  static MethodElementImpl methodElementWithParameters(String methodName,
-      List<DartType> typeArguments, DartType returnType,
+  static MethodElementImpl methodElementWithParameters(
+      String methodName,
+      List<DartType> typeArguments,
+      DartType returnType,
       List<ParameterElement> parameters) {
     MethodElementImpl method = new MethodElementImpl(methodName, 0);
     method.parameters = parameters;
@@ -548,8 +561,9 @@ class ElementFactory {
       setter.static = true;
       setter.synthetic = true;
       setter.variable = variable;
-      setter.parameters =
-          <ParameterElement>[requiredParameter2("_$name", type)];
+      setter.parameters = <ParameterElement>[
+        requiredParameter2("_$name", type)
+      ];
       setter.returnType = VoidTypeImpl.instance;
       setter.type = new FunctionTypeImpl(setter);
       variable.setter = setter;

@@ -236,7 +236,7 @@ class RawObject {
     kWatchedBit = 0,
     kMarkBit = 1,
     kCanonicalBit = 2,
-    kFromSnapshotBit = 3,
+    kVMHeapObjectBit = 3,
     kRememberedBit = 4,
 #if defined(ARCH_IS_32_BIT)
     kReservedTagPos = 5,  // kReservedBit{100K,1M,10M}
@@ -315,8 +315,6 @@ class RawObject {
     uword addr = reinterpret_cast<uword>(this);
     return (addr & kNewObjectAlignmentOffset) == kOldObjectAlignmentOffset;
   }
-  // Assumes this is a heap object.
-  bool IsVMHeapObject() const;
 
   // Like !IsHeapObject() || IsOldObject(), but compiles to a single branch.
   bool IsSmiOrOldObject() const {
@@ -369,11 +367,14 @@ class RawObject {
   void SetCanonical() {
     UpdateTagBit<CanonicalObjectTag>(true);
   }
-  bool IsCreatedFromSnapshot() const {
-    return CreatedFromSnapshotTag::decode(ptr()->tags_);
+  void ClearCanonical() {
+    UpdateTagBit<CanonicalObjectTag>(false);
   }
-  void SetCreatedFromSnapshot() {
-    UpdateTagBit<CreatedFromSnapshotTag>(true);
+  bool IsVMHeapObject() const {
+    return VMHeapObjectTag::decode(ptr()->tags_);
+  }
+  void SetVMHeapObject() {
+    UpdateTagBit<VMHeapObjectTag>(true);
   }
 
   // Support for GC remembered bit.
@@ -442,8 +443,8 @@ class RawObject {
     return reinterpret_cast<uword>(raw_obj->ptr());
   }
 
-  static bool IsCreatedFromSnapshot(intptr_t value) {
-    return CreatedFromSnapshotTag::decode(value);
+  static bool IsVMHeapObject(intptr_t value) {
+    return VMHeapObjectTag::decode(value);
   }
 
   static bool IsCanonical(intptr_t value) {
@@ -479,7 +480,7 @@ class RawObject {
 
   class CanonicalObjectTag : public BitField<bool, kCanonicalBit, 1> {};
 
-  class CreatedFromSnapshotTag : public BitField<bool, kFromSnapshotBit, 1> {};
+  class VMHeapObjectTag : public BitField<bool, kVMHeapObjectBit, 1> {};
 
   class ReservedBits : public
       BitField<intptr_t, kReservedTagPos, kReservedTagSize> {};  // NOLINT
@@ -581,6 +582,7 @@ class RawObject {
   friend class Scavenger;
   friend class ScavengerVisitor;
   friend class SizeExcludingClassVisitor;  // GetClassId
+  friend class RetainingPathVisitor;  // GetClassId
   friend class SnapshotReader;
   friend class SnapshotWriter;
   friend class String;
@@ -769,6 +771,7 @@ class RawFunction : public RawObject {
   RawObject** to() {
     return reinterpret_cast<RawObject**>(&ptr()->unoptimized_code_);
   }
+  uword entry_point_;
 
   int32_t token_pos_;
   int32_t end_token_pos_;
@@ -776,7 +779,6 @@ class RawFunction : public RawObject {
   int16_t num_fixed_parameters_;
   int16_t num_optional_parameters_;  // > 0: positional; < 0: named.
   int16_t deoptimization_counter_;
-  classid_t regexp_cid_;
   uint32_t kind_tag_;  // See Function::KindTagBits.
   uint16_t optimized_instruction_count_;
   uint16_t optimized_call_site_count_;
@@ -828,6 +830,7 @@ class RawField : public RawObject {
   RawAbstractType* type_;
   RawInstance* value_;  // Offset in words for instance and value for static.
   RawArray* dependent_code_;
+  RawFunction* initializer_;
   RawSmi* guarded_list_length_;
   RawObject** to() {
     return reinterpret_cast<RawObject**>(&ptr()->guarded_list_length_);
@@ -842,7 +845,7 @@ class RawField : public RawObject {
   // generated on platforms with weak addressing modes (ARM, MIPS).
   int8_t guarded_list_length_in_object_offset_;
 
-  uint8_t kind_bits_;  // static, final, const, has initializer.
+  uint8_t kind_bits_;  // static, final, const, has initializer....
 };
 
 
@@ -945,7 +948,9 @@ class RawLibrary : public RawObject {
   bool corelib_imported_;
   bool is_dart_scheme_;
   bool debuggable_;             // True if debugger can stop in library.
+  bool is_in_fullsnapshot_;     // True if library is in a full snapshot.
 
+  friend class Class;
   friend class Isolate;
 };
 
@@ -971,7 +976,8 @@ class RawCode : public RawObject {
   enum InlinedMetadataIndex {
     kInlinedIntervalsIndex = 0,
     kInlinedIdToFunctionIndex = 1,
-    kInlinedMetadataSize = 2,
+    kInlinedCallerIdMapIndex = 2,
+    kInlinedMetadataSize = 3,
   };
 
   RAW_HEAP_OBJECT_IMPLEMENTATION(Code);
@@ -998,6 +1004,7 @@ class RawCode : public RawObject {
   RawObject** to() {
     return reinterpret_cast<RawObject**>(&ptr()->comments_);
   }
+  uword entry_point_;
 
   // Compilation timestamp.
   int64_t compile_timestamp_;

@@ -267,7 +267,7 @@ intptr_t ObjectPoolWrapper::AddObject(ObjectPool::Entry entry,
 intptr_t ObjectPoolWrapper::AddExternalLabel(const ExternalLabel* label,
                                              Patchability patchable) {
   return AddObject(ObjectPool::Entry(label->address(),
-                                     ObjectPool::kImmediate),
+                                     ObjectPool::kExternalLabel),
                    patchable);
 }
 
@@ -301,7 +301,7 @@ intptr_t ObjectPoolWrapper::FindImmediate(uword imm) {
 intptr_t ObjectPoolWrapper::FindExternalLabel(const ExternalLabel* label,
                                               Patchability patchable) {
   return FindObject(ObjectPool::Entry(label->address(),
-                                      ObjectPool::kImmediate),
+                                      ObjectPool::kExternalLabel),
                     patchable);
 }
 
@@ -312,9 +312,10 @@ RawObjectPool* ObjectPoolWrapper::MakeObjectPool() {
     return Object::empty_object_pool().raw();
   }
   const ObjectPool& result = ObjectPool::Handle(ObjectPool::New(len));
+  const TypedData& info_array = TypedData::Handle(result.info_array());
   for (intptr_t i = 0; i < len; ++i) {
     ObjectPool::EntryType info = object_pool_[i].type_;
-    result.SetInfoAt(i, info);
+    info_array.SetInt8(i, static_cast<int8_t>(info));
     if (info == ObjectPool::kTaggedObject) {
       result.SetObjectAt(i, *object_pool_[i].obj_);
     } else {

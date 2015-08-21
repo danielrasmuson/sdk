@@ -6,22 +6,24 @@
 // Files when using deferred loading.
 
 import 'package:async_helper/async_helper.dart';
-import 'package:compiler/src/dart2jslib.dart';
+import 'package:compiler/src/compiler.dart';
 import 'package:expect/expect.dart';
 import 'memory_compiler.dart';
 import 'output_collector.dart';
 
 void main() {
-  OutputCollector collector = new OutputCollector();
-  Compiler compiler = compilerFor(
-      MEMORY_SOURCE_FILES,
+  asyncTest(() async {
+    OutputCollector collector = new OutputCollector();
+    CompilationResult result = await runCompiler(
+      memorySourceFiles: MEMORY_SOURCE_FILES,
       outputProvider: collector);
-  asyncTest(() => compiler.run(Uri.parse('memory:main.dart')).then((_) {
+    Compiler compiler = result.compiler;
+
     lookupLibrary(name) {
       return compiler.libraryLoader.lookupLibrary(Uri.parse(name));
     }
 
-    var main = compiler.mainApp.find(Compiler.MAIN);
+    var main = compiler.mainFunction;
     Expect.isNotNull(main, "Could not find 'main'");
     compiler.deferredLoadTask.onResolutionComplete(main);
 
@@ -78,7 +80,7 @@ void main() {
     Expect.isTrue(new RegExp(r"= .string4").hasMatch(lib1Output));
     Expect.isTrue(new RegExp(r"= .string4").hasMatch(lib2Output));
     Expect.isFalse(new RegExp(r"= .string4").hasMatch(lib12Output));
-  }));
+  });
 }
 
 // Make sure that deferred constants are not inlined into the main hunk.

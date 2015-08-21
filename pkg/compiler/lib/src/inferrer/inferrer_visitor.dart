@@ -4,18 +4,28 @@
 
 library inferrer_visitor;
 
+import 'dart:collection' show
+    IterableMixin;
+
+import '../compiler.dart' show
+    Compiler;
 import '../constants/constant_system.dart';
 import '../constants/expressions.dart';
-import '../dart2jslib.dart' hide Selector, TypedSelector;
 import '../dart_types.dart';
+import '../diagnostics/spannable.dart' show
+    Spannable;
 import '../elements/elements.dart';
 import '../resolution/operators.dart';
+import '../resolved_visitor.dart';
 import '../tree/tree.dart';
+import '../types/types.dart' show
+    TypeMask;
+import '../types/constants.dart' show
+    computeTypeMask;
 import '../universe/universe.dart';
 import '../util/util.dart';
-import '../types/types.dart' show TypeMask;
-import '../types/constants.dart' show computeTypeMask;
-import 'dart:collection' show IterableMixin;
+import '../world.dart' show
+    ClassWorld;
 
 /**
  * The interface [InferrerVisitor] will use when working on types.
@@ -814,6 +824,11 @@ abstract class InferrerVisitor
   T visitTypePrefixSend(Send node) {
     // TODO(johnniwinther): Remove the need for handling this node.
     return types.dynamicType;
+  }
+
+  @override
+  void previsitDeferredAccess(Send node, PrefixElement prefix, _) {
+    // Deferred access does not affect inference.
   }
 
   T handleTypeLiteralGet() {

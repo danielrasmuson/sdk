@@ -66,9 +66,9 @@ String extractParameter(String argument, {bool isOptionalArgument: false}) {
   return m[2];
 }
 
-String extractPath(String argument) {
+String extractPath(String argument, {bool isDirectory: true}) {
   String path = nativeToUriPath(extractParameter(argument));
-  return path.endsWith("/") ? path : "$path/";
+  return !path.endsWith("/") && isDirectory ? "$path/" : path;
 }
 
 void parseCommandLine(List<OptionHandler> handlers, List<String> argv) {
@@ -143,7 +143,8 @@ Future<api.CompilationResult> compile(List<String> argv) {
   }
 
   setPackageConfig(String argument) {
-    packageConfig = currentDirectory.resolve(extractPath(argument));
+    packageConfig =
+        currentDirectory.resolve(extractPath(argument, isDirectory: false));
   }
 
   setOutput(Iterator<String> arguments) {
@@ -317,6 +318,7 @@ Future<api.CompilationResult> compile(List<String> argv) {
     new OptionHandler('--library-root=.+', setLibraryRoot),
     new OptionHandler('--out=.+|-o.*', setOutput, multipleArguments: true),
     new OptionHandler('--allow-mock-compilation', passThrough),
+    new OptionHandler('--fast-startup', passThrough),
     new OptionHandler('--minify|-m', implyCompilation),
     new OptionHandler('--preserve-uris', passThrough),
     new OptionHandler('--force-strip=.*', setStrip),
@@ -503,7 +505,7 @@ void writeString(Uri uri, String text) {
 void fail(String message) {
   if (diagnosticHandler != null) {
     diagnosticHandler.report(
-        null, -1, -1, message, api.Diagnostic.ERROR);
+        null, null, -1, -1, message, api.Diagnostic.ERROR);
   } else {
     print('Error: $message');
   }

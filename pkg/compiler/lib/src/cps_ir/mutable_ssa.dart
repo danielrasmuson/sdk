@@ -26,18 +26,19 @@ class MutableVariablePreanalysis extends RecursiveVisitor {
   /// its declaration.
   Set<MutableVariable> hasAssignmentInTry = new Set<MutableVariable>();
 
-  void visitLetHandler(LetHandler node) {
+  @override
+  Expression traverseLetHandler(LetHandler node) {
+    push(node.handler);
     ++currentDepth;
-    visit(node.body);
-    --currentDepth;
-    visit(node.handler);
+    pushAction(() => --currentDepth);
+    return node.body;
   }
 
   void processLetMutable(LetMutable node) {
     variableDepth[node.variable] = currentDepth;
   }
 
-  void processSetMutableVariable(SetMutableVariable node) {
+  void processSetMutable(SetMutable node) {
     MutableVariable variable = node.variable.definition;
     if (currentDepth > variableDepth[variable]) {
       hasAssignmentInTry.add(variable);
@@ -155,17 +156,19 @@ class MutableVariableEliminator implements Pass {
         // Remove the mutable variable binding.
         node.value.unlink();
         removeNode(node);
-      } else if (node is SetMutableVariable &&
-                 shouldRewrite(node.variable.definition)) {
-        // As above, update the environment, preserve variables and remove
-        // the mutable variable assignment.
-        MutableVariable variable = node.variable.definition;
-        environment[variable] = node.value.definition;
-        mergeHints(variable, node.value.definition);
-        node.value.unlink();
-        removeNode(node);
-      } else if (node is LetPrim && node.primitive is GetMutableVariable) {
-        GetMutableVariable getter = node.primitive;
+      } else if (node is LetPrim && node.primitive is SetMutable) {
+        SetMutable setter = node.primitive;
+        MutableVariable variable = setter.variable.definition;
+        if (shouldRewrite(variable)) {
+          // As above, update the environment, preserve variables and remove
+          // the mutable variable assignment.
+          environment[variable] = setter.value.definition;
+          mergeHints(variable, setter.value.definition);
+          setter.value.unlink();
+          removeNode(node);
+        }
+      } else if (node is LetPrim && node.primitive is GetMutable) {
+        GetMutable getter = node.primitive;
         MutableVariable variable = getter.variable.definition;
         if (shouldRewrite(variable)) {
           // Replace with the reaching definition from the environment.

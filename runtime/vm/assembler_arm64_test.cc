@@ -287,9 +287,9 @@ ASSEMBLER_TEST_RUN(AddExtReg, test) {
 
 
 ASSEMBLER_TEST_GENERATE(AddCarryInOut, assembler) {
-  __ LoadImmediate(R2, -1, kNoPP);
-  __ LoadImmediate(R1, 1, kNoPP);
-  __ LoadImmediate(R0, 0, kNoPP);
+  __ LoadImmediate(R2, -1);
+  __ LoadImmediate(R1, 1);
+  __ LoadImmediate(R0, 0);
   __ adds(IP0, R2, Operand(R1));  // c_out = 1.
   __ adcs(IP0, R2, R0);  // c_in = 1, c_out = 1.
   __ adc(R0, R0, R0);  // c_in = 1.
@@ -304,8 +304,8 @@ ASSEMBLER_TEST_RUN(AddCarryInOut, test) {
 
 
 ASSEMBLER_TEST_GENERATE(SubCarryInOut, assembler) {
-  __ LoadImmediate(R1, 1, kNoPP);
-  __ LoadImmediate(R0, 0, kNoPP);
+  __ LoadImmediate(R1, 1);
+  __ LoadImmediate(R0, 0);
   __ subs(IP0, R0, Operand(R1));  // c_out = 1.
   __ sbcs(IP0, R0, R0);  // c_in = 1, c_out = 1.
   __ sbc(R0, R0, R0);  // c_in = 1.
@@ -320,10 +320,10 @@ ASSEMBLER_TEST_RUN(SubCarryInOut, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Overflow, assembler) {
-  __ LoadImmediate(R0, 0, kNoPP);
-  __ LoadImmediate(R1, 1, kNoPP);
-  __ LoadImmediate(R2, 0xFFFFFFFFFFFFFFFF, kNoPP);
-  __ LoadImmediate(R3, 0x7FFFFFFFFFFFFFFF, kNoPP);
+  __ LoadImmediate(R0, 0);
+  __ LoadImmediate(R1, 1);
+  __ LoadImmediate(R2, 0xFFFFFFFFFFFFFFFF);
+  __ LoadImmediate(R3, 0x7FFFFFFFFFFFFFFF);
   __ adds(IP0, R2, Operand(R1));  // c_out = 1.
   __ adcs(IP0, R3, R0);  // c_in = 1, c_out = 1, v = 1.
   __ csinc(R0, R0, R0, VS);  // R0 = v ? R0 : R0 + 1.
@@ -338,9 +338,9 @@ ASSEMBLER_TEST_RUN(Overflow, test) {
 
 
 ASSEMBLER_TEST_GENERATE(WordAddCarryInOut, assembler) {
-  __ LoadImmediate(R2, -1, kNoPP);
-  __ LoadImmediate(R1, 1, kNoPP);
-  __ LoadImmediate(R0, 0, kNoPP);
+  __ LoadImmediate(R2, -1);
+  __ LoadImmediate(R1, 1);
+  __ LoadImmediate(R0, 0);
   __ addsw(IP0, R2, Operand(R1));  // c_out = 1.
   __ adcsw(IP0, R2, R0);  // c_in = 1, c_out = 1.
   __ adcw(R0, R0, R0);  // c_in = 1.
@@ -355,8 +355,8 @@ ASSEMBLER_TEST_RUN(WordAddCarryInOut, test) {
 
 
 ASSEMBLER_TEST_GENERATE(WordSubCarryInOut, assembler) {
-  __ LoadImmediate(R1, 1, kNoPP);
-  __ LoadImmediate(R0, 0, kNoPP);
+  __ LoadImmediate(R1, 1);
+  __ LoadImmediate(R0, 0);
   __ subsw(IP0, R0, Operand(R1));  // c_out = 1.
   __ sbcsw(IP0, R0, R0);  // c_in = 1, c_out = 1.
   __ sbcw(R0, R0, R0);  // c_in = 1.
@@ -371,10 +371,10 @@ ASSEMBLER_TEST_RUN(WordSubCarryInOut, test) {
 
 
 ASSEMBLER_TEST_GENERATE(WordOverflow, assembler) {
-  __ LoadImmediate(R0, 0, kNoPP);
-  __ LoadImmediate(R1, 1, kNoPP);
-  __ LoadImmediate(R2, 0xFFFFFFFF, kNoPP);
-  __ LoadImmediate(R3, 0x7FFFFFFF, kNoPP);
+  __ LoadImmediate(R0, 0);
+  __ LoadImmediate(R1, 1);
+  __ LoadImmediate(R2, 0xFFFFFFFF);
+  __ LoadImmediate(R3, 0x7FFFFFFF);
   __ addsw(IP0, R2, Operand(R1));  // c_out = 1.
   __ adcsw(IP0, R3, R0);  // c_in = 1, c_out = 1, v = 1.
   __ csinc(R0, R0, R0, VS);  // R0 = v ? R0 : R0 + 1.
@@ -510,7 +510,7 @@ ASSEMBLER_TEST_RUN(LoadStoreScaledReg, test) {
 
 ASSEMBLER_TEST_GENERATE(LoadSigned32Bit, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadImmediate(R1, 0xffffffff, kNoPP);
+  __ LoadImmediate(R1, 0xffffffff);
   __ str(R1, Address(SP, -4, Address::PreIndex, kWord), kWord);
   __ ldr(R0, Address(SP), kWord);
   __ ldr(R1, Address(SP, 4, Address::PostIndex, kWord), kWord);
@@ -527,8 +527,8 @@ ASSEMBLER_TEST_RUN(LoadSigned32Bit, test) {
 
 ASSEMBLER_TEST_GENERATE(SimpleLoadStorePair, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadImmediate(R2, 43, kNoPP);
-  __ LoadImmediate(R3, 42, kNoPP);
+  __ LoadImmediate(R2, 43);
+  __ LoadImmediate(R3, 42);
   __ stp(R2, R3, Address(SP, -2*kWordSize, Address::PairPreIndex));
   __ ldp(R0, R1, Address(SP, 2*kWordSize, Address::PairPostIndex));
   __ sub(R0, R0, Operand(R1));
@@ -545,8 +545,8 @@ ASSEMBLER_TEST_RUN(SimpleLoadStorePair, test) {
 
 ASSEMBLER_TEST_GENERATE(LoadStorePairOffset, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadImmediate(R2, 43, kNoPP);
-  __ LoadImmediate(R3, 42, kNoPP);
+  __ LoadImmediate(R2, 43);
+  __ LoadImmediate(R3, 42);
   __ sub(SP, SP, Operand(4 * kWordSize));
   __ stp(R2, R3, Address::Pair(SP, 2 * kWordSize));
   __ ldp(R0, R1, Address::Pair(SP, 2 * kWordSize));
@@ -729,11 +729,11 @@ ASSEMBLER_TEST_GENERATE(Clz, assembler) {
   __ clz(R1, ZR);
   __ cmp(R1, Operand(64));
   __ b(&error, NE);
-  __ LoadImmediate(R2, 42, kNoPP);
+  __ LoadImmediate(R2, 42);
   __ clz(R2, R2);
   __ cmp(R2, Operand(58));
   __ b(&error, NE);
-  __ LoadImmediate(R0, -1, kNoPP);
+  __ LoadImmediate(R0, -1);
   __ clz(R1, R0);
   __ cmp(R1, Operand(0));
   __ b(&error, NE);
@@ -744,7 +744,7 @@ ASSEMBLER_TEST_GENERATE(Clz, assembler) {
   __ mov(R0, ZR);
   __ ret();
   __ Bind(&error);
-  __ LoadImmediate(R0, 1, kNoPP);
+  __ LoadImmediate(R0, 1);
   __ ret();
 }
 
@@ -998,13 +998,13 @@ ASSEMBLER_TEST_RUN(CmpBranchIfNotZeroNotTaken, test) {
 ASSEMBLER_TEST_GENERATE(FcmpEqBranch, assembler) {
   Label l;
 
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, 234.0, kNoPP);
-  __ LoadDImmediate(V2, 234.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, 234.0);
+  __ LoadDImmediate(V2, 234.0);
 
   __ fcmpd(V1, V2);
   __ b(&l, EQ);
-  __ LoadDImmediate(V0, 0.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
   __ Bind(&l);
   __ ret();
 }
@@ -1019,13 +1019,13 @@ ASSEMBLER_TEST_RUN(FcmpEqBranch, test) {
 ASSEMBLER_TEST_GENERATE(FcmpEqBranchNotTaken, assembler) {
   Label l;
 
-  __ LoadDImmediate(V0, 0.0, kNoPP);
-  __ LoadDImmediate(V1, 233.0, kNoPP);
-  __ LoadDImmediate(V2, 234.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
+  __ LoadDImmediate(V1, 233.0);
+  __ LoadDImmediate(V2, 234.0);
 
   __ fcmpd(V1, V2);
   __ b(&l, EQ);
-  __ LoadDImmediate(V0, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
   __ Bind(&l);
   __ ret();
 }
@@ -1040,13 +1040,13 @@ ASSEMBLER_TEST_RUN(FcmpEqBranchNotTaken, test) {
 ASSEMBLER_TEST_GENERATE(FcmpLtBranch, assembler) {
   Label l;
 
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, 233.0, kNoPP);
-  __ LoadDImmediate(V2, 234.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, 233.0);
+  __ LoadDImmediate(V2, 234.0);
 
   __ fcmpd(V1, V2);
   __ b(&l, LT);
-  __ LoadDImmediate(V0, 0.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
   __ Bind(&l);
   __ ret();
 }
@@ -1061,13 +1061,13 @@ ASSEMBLER_TEST_RUN(FcmpLtBranch, test) {
 ASSEMBLER_TEST_GENERATE(FcmpLtBranchNotTaken, assembler) {
   Label l;
 
-  __ LoadDImmediate(V0, 0.0, kNoPP);
-  __ LoadDImmediate(V1, 235.0, kNoPP);
-  __ LoadDImmediate(V2, 234.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
+  __ LoadDImmediate(V1, 235.0);
+  __ LoadDImmediate(V2, 234.0);
 
   __ fcmpd(V1, V2);
   __ b(&l, LT);
-  __ LoadDImmediate(V0, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
   __ Bind(&l);
   __ ret();
 }
@@ -1082,15 +1082,15 @@ ASSEMBLER_TEST_RUN(FcmpLtBranchNotTaken, test) {
 ASSEMBLER_TEST_GENERATE(FcmpzGtBranch, assembler) {
   Label l;
 
-  __ LoadDImmediate(V0, 235.0, kNoPP);
-  __ LoadDImmediate(V1, 233.0, kNoPP);
+  __ LoadDImmediate(V0, 235.0);
+  __ LoadDImmediate(V1, 233.0);
 
   __ fcmpdz(V1);
   __ b(&l, GT);
-  __ LoadDImmediate(V0, 0.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
   __ ret();
   __ Bind(&l);
-  __ LoadDImmediate(V0, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
   __ ret();
 }
 
@@ -1513,7 +1513,7 @@ ASSEMBLER_TEST_RUN(Umaddl, test) {
 
 // Loading immediate values without the object pool.
 ASSEMBLER_TEST_GENERATE(LoadImmediateSmall, assembler) {
-  __ LoadImmediate(R0, 42, kNoRegister);
+  __ LoadImmediate(R0, 42);
   __ ret();
 }
 
@@ -1525,7 +1525,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateSmall, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateMed, assembler) {
-  __ LoadImmediate(R0, 0xf1234123, kNoRegister);
+  __ LoadImmediate(R0, 0xf1234123);
   __ ret();
 }
 
@@ -1537,7 +1537,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateMed, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateMed2, assembler) {
-  __ LoadImmediate(R0, 0x4321f1234123, kNoRegister);
+  __ LoadImmediate(R0, 0x4321f1234123);
   __ ret();
 }
 
@@ -1550,7 +1550,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateMed2, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateLarge, assembler) {
-  __ LoadImmediate(R0, 0x9287436598237465, kNoRegister);
+  __ LoadImmediate(R0, 0x9287436598237465);
   __ ret();
 }
 
@@ -1563,7 +1563,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateLarge, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateSmallNeg, assembler) {
-  __ LoadImmediate(R0, -42, kNoRegister);
+  __ LoadImmediate(R0, -42);
   __ ret();
 }
 
@@ -1575,7 +1575,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateSmallNeg, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateMedNeg, assembler) {
-  __ LoadImmediate(R0, -0x1212341234, kNoRegister);
+  __ LoadImmediate(R0, -0x1212341234);
   __ ret();
 }
 
@@ -1587,7 +1587,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateMedNeg, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateMedNeg2, assembler) {
-  __ LoadImmediate(R0, -0x1212340000, kNoRegister);
+  __ LoadImmediate(R0, -0x1212340000);
   __ ret();
 }
 
@@ -1599,7 +1599,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateMedNeg2, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateMedNeg3, assembler) {
-  __ LoadImmediate(R0, -0x1200001234, kNoRegister);
+  __ LoadImmediate(R0, -0x1200001234);
   __ ret();
 }
 
@@ -1611,7 +1611,7 @@ ASSEMBLER_TEST_RUN(LoadImmediateMedNeg3, test) {
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediateMedNeg4, assembler) {
-  __ LoadImmediate(R0, -0x12341234, kNoRegister);
+  __ LoadImmediate(R0, -0x12341234);
   __ ret();
 }
 
@@ -1625,152 +1625,130 @@ ASSEMBLER_TEST_RUN(LoadImmediateMedNeg4, test) {
 // Loading immediate values with the object pool.
 ASSEMBLER_TEST_GENERATE(LoadImmediatePPSmall, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadImmediate(R0, 42, PP);
-  __ PopAndUntagPP();
+  __ EnterStubFrame();
+  __ LoadImmediate(R0, 42);
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadImmediatePPSmall, test) {
-  typedef int64_t (*Int64Return)() DART_UNUSED;
-  EXPECT_EQ(42, EXECUTE_TEST_CODE_INT64(Int64Return, test->entry()));
+  EXPECT_EQ(42, test->Invoke<int64_t>());
 }
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediatePPMed, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadImmediate(R0, 0xf1234123, PP);
-  __ PopAndUntagPP();
+  __ EnterStubFrame();
+  __ LoadImmediate(R0, 0xf1234123);
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadImmediatePPMed, test) {
-  typedef int64_t (*Int64Return)() DART_UNUSED;
-  EXPECT_EQ(0xf1234123, EXECUTE_TEST_CODE_INT64(Int64Return, test->entry()));
+  EXPECT_EQ(0xf1234123, test->Invoke<int64_t>());
 }
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediatePPMed2, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadImmediate(R0, 0x4321f1234124, PP);
-  __ PopAndUntagPP();
+  __ EnterStubFrame();
+  __ LoadImmediate(R0, 0x4321f1234124);
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadImmediatePPMed2, test) {
-  typedef int64_t (*Int64Return)() DART_UNUSED;
-  EXPECT_EQ(
-      0x4321f1234124, EXECUTE_TEST_CODE_INT64(Int64Return, test->entry()));
+  EXPECT_EQ(0x4321f1234124, test->Invoke<int64_t>());
 }
 
 
 ASSEMBLER_TEST_GENERATE(LoadImmediatePPLarge, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadImmediate(R0, 0x9287436598237465, PP);
-  __ PopAndUntagPP();
+  __ EnterStubFrame();
+  __ LoadImmediate(R0, 0x9287436598237465);
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadImmediatePPLarge, test) {
-  typedef int64_t (*Int64Return)() DART_UNUSED;
-  EXPECT_EQ(static_cast<int64_t>(0x9287436598237465),
-            EXECUTE_TEST_CODE_INT64(Int64Return, test->entry()));
+  EXPECT_EQ(static_cast<int64_t>(0x9287436598237465), test->Invoke<int64_t>());
 }
 
 
-#if defined(USING_SIMULATOR)
-#define ASSEMBLER_TEST_RUN_WITH_THREAD(var_name) \
+#define ASSEMBLER_TEST_RUN_WITH_THREAD(result_type, var_name) \
   Thread* thread = Thread::Current(); \
-  int64_t var_name = Simulator::Current()->Call( \
-      bit_cast<intptr_t, uword>(test->entry()), \
-      reinterpret_cast<intptr_t>(thread), 0, 0, 0)
-#else
-#define ASSEMBER_TEST_RUN_WITH_THREAD(var_name) \
-  typedef int64_t (*Int64Return)(Thread* thread); \
-  Int64Return test_code = reinterpret_cast<Int64Return>(test->entry()); \
-  int64_t var_name = test_code(thread)
-#endif
+  result_type var_name = test->Invoke<result_type>(thread);
 
 
 // LoadObject null.
 ASSEMBLER_TEST_GENERATE(LoadObjectNull, assembler) {
   __ SetupDartSP(kTestStackSpace);
+  __ EnterStubFrame();
   __ Push(THR);
   __ mov(THR, R0);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadObject(R0, Object::null_object(), PP);
-  __ PopAndUntagPP();
+  __ LoadObject(R0, Object::null_object());
   __ Pop(THR);
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadObjectNull, test) {
-  ASSEMBLER_TEST_RUN_WITH_THREAD(result);
-  EXPECT_EQ(reinterpret_cast<int64_t>(Object::null()), result);
+  ASSEMBLER_TEST_RUN_WITH_THREAD(RawObject*, result);
+  EXPECT_EQ(Object::null(), result);
 }
 
 
 ASSEMBLER_TEST_GENERATE(LoadObjectTrue, assembler) {
   __ SetupDartSP(kTestStackSpace);
+  __ EnterStubFrame();
   __ Push(THR);
   __ mov(THR, R0);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadObject(R0, Bool::True(), PP);
-  __ PopAndUntagPP();
+  __ LoadObject(R0, Bool::True());
   __ Pop(THR);
+  __ LeaveDartFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadObjectTrue, test) {
-  ASSEMBLER_TEST_RUN_WITH_THREAD(result);
-  EXPECT_EQ(reinterpret_cast<int64_t>(Bool::True().raw()), result);
+  ASSEMBLER_TEST_RUN_WITH_THREAD(RawObject*, result);
+  EXPECT_EQ(Bool::True().raw(), result);
 }
 
 
 ASSEMBLER_TEST_GENERATE(LoadObjectFalse, assembler) {
   __ SetupDartSP(kTestStackSpace);
+  __ EnterStubFrame();
   __ Push(THR);
   __ mov(THR, R0);
-  __ TagAndPushPP();  // Save caller's pool pointer and load a new one here.
-  __ LoadPoolPointer(PP);
-  __ LoadObject(R0, Bool::False(), PP);
-  __ PopAndUntagPP();
+  __ LoadObject(R0, Bool::False());
   __ Pop(THR);
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(LoadObjectFalse, test) {
-  ASSEMBLER_TEST_RUN_WITH_THREAD(result);
-  EXPECT_EQ(reinterpret_cast<int64_t>(Bool::False().raw()), result);
+  ASSEMBLER_TEST_RUN_WITH_THREAD(RawObject*, result);
+  EXPECT_EQ(Bool::False().raw(), result);
 }
 
 
 ASSEMBLER_TEST_GENERATE(CSelTrue, assembler) {
-  __ LoadImmediate(R1, 42, kNoRegister);
-  __ LoadImmediate(R2, 1234, kNoRegister);
+  __ LoadImmediate(R1, 42);
+  __ LoadImmediate(R2, 1234);
   __ CompareRegisters(R1, R2);
   __ csel(R0, R1, R2, LT);
   __ ret();
@@ -1784,8 +1762,8 @@ ASSEMBLER_TEST_RUN(CSelTrue, test) {
 
 
 ASSEMBLER_TEST_GENERATE(CSelFalse, assembler) {
-  __ LoadImmediate(R1, 42, kNoRegister);
-  __ LoadImmediate(R2, 1234, kNoRegister);
+  __ LoadImmediate(R1, 42);
+  __ LoadImmediate(R2, 1234);
   __ CompareRegisters(R1, R2);
   __ csel(R0, R1, R2, GE);
   __ ret();
@@ -1799,8 +1777,8 @@ ASSEMBLER_TEST_RUN(CSelFalse, test) {
 
 
 ASSEMBLER_TEST_GENERATE(CsincFalse, assembler) {
-  __ LoadImmediate(R1, 42, kNoRegister);
-  __ LoadImmediate(R2, 1234, kNoRegister);
+  __ LoadImmediate(R1, 42);
+  __ LoadImmediate(R2, 1234);
   __ CompareRegisters(R1, R2);
   __ csinc(R0, R2, R1, GE);
   __ ret();
@@ -1814,8 +1792,8 @@ ASSEMBLER_TEST_RUN(CsincFalse, test) {
 
 
 ASSEMBLER_TEST_GENERATE(CsincTrue, assembler) {
-  __ LoadImmediate(R1, 42, kNoRegister);
-  __ LoadImmediate(R2, 1234, kNoRegister);
+  __ LoadImmediate(R1, 42);
+  __ LoadImmediate(R2, 1234);
   __ CompareRegisters(R1, R2);
   __ csinc(R0, R2, R1, LT);
   __ ret();
@@ -1829,8 +1807,8 @@ ASSEMBLER_TEST_RUN(CsincTrue, test) {
 
 
 ASSEMBLER_TEST_GENERATE(CsinvFalse, assembler) {
-  __ LoadImmediate(R1, 42, kNoRegister);
-  __ LoadImmediate(R2, 1234, kNoRegister);
+  __ LoadImmediate(R1, 42);
+  __ LoadImmediate(R2, 1234);
   __ CompareRegisters(R1, R2);
   __ csinv(R0, R2, R1, GE);
   __ ret();
@@ -1844,8 +1822,8 @@ ASSEMBLER_TEST_RUN(CsinvFalse, test) {
 
 
 ASSEMBLER_TEST_GENERATE(CsinvTrue, assembler) {
-  __ LoadImmediate(R1, 42, kNoRegister);
-  __ LoadImmediate(R2, 1234, kNoRegister);
+  __ LoadImmediate(R1, 42);
+  __ LoadImmediate(R2, 1234);
   __ CompareRegisters(R1, R2);
   __ csinv(R0, R2, R1, LT);
   __ ret();
@@ -1860,7 +1838,7 @@ ASSEMBLER_TEST_RUN(CsinvTrue, test) {
 
 // Floating point move immediate, to/from integer register.
 ASSEMBLER_TEST_GENERATE(Fmovdi, assembler) {
-  __ LoadDImmediate(V0, 1.0, kNoPP);
+  __ LoadDImmediate(V0, 1.0);
   __ ret();
 }
 
@@ -1872,7 +1850,7 @@ ASSEMBLER_TEST_RUN(Fmovdi, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fmovdi2, assembler) {
-  __ LoadDImmediate(V0, 123412983.1324524315, kNoPP);
+  __ LoadDImmediate(V0, 123412983.1324524315);
   __ ret();
 }
 
@@ -1885,7 +1863,7 @@ ASSEMBLER_TEST_RUN(Fmovdi2, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fmovrd, assembler) {
-  __ LoadDImmediate(V1, 1.0, kNoPP);
+  __ LoadDImmediate(V1, 1.0);
   __ fmovrd(R0, V1);
   __ ret();
 }
@@ -1899,7 +1877,7 @@ ASSEMBLER_TEST_RUN(Fmovrd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fmovdr, assembler) {
-  __ LoadDImmediate(V1, 1.0, kNoPP);
+  __ LoadDImmediate(V1, 1.0);
   __ fmovrd(R1, V1);
   __ fmovdr(V0, R1);
   __ ret();
@@ -1914,7 +1892,7 @@ ASSEMBLER_TEST_RUN(Fmovdr, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrdFstrdPrePostIndex, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V1, 42.0);
   __ fstrd(V1, Address(SP, -1*kWordSize, Address::PreIndex));
   __ fldrd(V0, Address(SP, 1*kWordSize, Address::PostIndex));
   __ mov(CSP, SP);
@@ -1930,7 +1908,7 @@ ASSEMBLER_TEST_RUN(FldrdFstrdPrePostIndex, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrsFstrsPrePostIndex, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V1, 42.0);
   __ fcvtsd(V2, V1);
   __ fstrs(V2, Address(SP, -1*kWordSize, Address::PreIndex));
   __ fldrs(V3, Address(SP, 1*kWordSize, Address::PostIndex));
@@ -1948,9 +1926,9 @@ ASSEMBLER_TEST_RUN(FldrsFstrsPrePostIndex, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrqFstrqPrePostIndex, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V1, 21.0, kNoPP);
-  __ LoadDImmediate(V2, 21.0, kNoPP);
-  __ LoadImmediate(R1, 42, kNoPP);
+  __ LoadDImmediate(V1, 21.0);
+  __ LoadDImmediate(V2, 21.0);
+  __ LoadImmediate(R1, 42);
   __ Push(R1);
   __ PushDouble(V1);
   __ PushDouble(V2);
@@ -1972,7 +1950,7 @@ ASSEMBLER_TEST_RUN(FldrqFstrqPrePostIndex, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fcvtzds, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
   __ fcvtzds(R0, V0);
   __ ret();
 }
@@ -1985,7 +1963,7 @@ ASSEMBLER_TEST_RUN(Fcvtzds, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Scvtfdx, assembler) {
-  __ LoadImmediate(R0, 42, kNoPP);
+  __ LoadImmediate(R0, 42);
   __ scvtfdx(V0, R0);
   __ ret();
 }
@@ -1999,7 +1977,7 @@ ASSEMBLER_TEST_RUN(Scvtfdx, test) {
 
 ASSEMBLER_TEST_GENERATE(Scvtfdw, assembler) {
   // Fill upper 32-bits with garbage.
-  __ LoadImmediate(R0, 0x111111110000002A, kNoPP);
+  __ LoadImmediate(R0, 0x111111110000002A);
   __ scvtfdw(V0, R0);
   __ ret();
 }
@@ -2012,7 +1990,7 @@ ASSEMBLER_TEST_RUN(Scvtfdw, test) {
 
 
 ASSEMBLER_TEST_GENERATE(FabsdPos, assembler) {
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V1, 42.0);
   __ fabsd(V0, V1);
   __ ret();
 }
@@ -2025,7 +2003,7 @@ ASSEMBLER_TEST_RUN(FabsdPos, test) {
 
 
 ASSEMBLER_TEST_GENERATE(FabsdNeg, assembler) {
-  __ LoadDImmediate(V1, -42.0, kNoPP);
+  __ LoadDImmediate(V1, -42.0);
   __ fabsd(V0, V1);
   __ ret();
 }
@@ -2038,7 +2016,7 @@ ASSEMBLER_TEST_RUN(FabsdNeg, test) {
 
 
 ASSEMBLER_TEST_GENERATE(FnegdPos, assembler) {
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V1, 42.0);
   __ fnegd(V0, V1);
   __ ret();
 }
@@ -2051,7 +2029,7 @@ ASSEMBLER_TEST_RUN(FnegdPos, test) {
 
 
 ASSEMBLER_TEST_GENERATE(FnegdNeg, assembler) {
-  __ LoadDImmediate(V1, -42.0, kNoPP);
+  __ LoadDImmediate(V1, -42.0);
   __ fnegd(V0, V1);
   __ ret();
 }
@@ -2064,7 +2042,7 @@ ASSEMBLER_TEST_RUN(FnegdNeg, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fsqrtd, assembler) {
-  __ LoadDImmediate(V1, 64.0, kNoPP);
+  __ LoadDImmediate(V1, 64.0);
   __ fsqrtd(V0, V1);
   __ ret();
 }
@@ -2077,8 +2055,8 @@ ASSEMBLER_TEST_RUN(Fsqrtd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fmuld, assembler) {
-  __ LoadDImmediate(V1, 84.0, kNoPP);
-  __ LoadDImmediate(V2, 0.5, kNoPP);
+  __ LoadDImmediate(V1, 84.0);
+  __ LoadDImmediate(V2, 0.5);
   __ fmuld(V0, V1, V2);
   __ ret();
 }
@@ -2091,8 +2069,8 @@ ASSEMBLER_TEST_RUN(Fmuld, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fdivd, assembler) {
-  __ LoadDImmediate(V1, 84.0, kNoPP);
-  __ LoadDImmediate(V2, 2.0, kNoPP);
+  __ LoadDImmediate(V1, 84.0);
+  __ LoadDImmediate(V2, 2.0);
   __ fdivd(V0, V1, V2);
   __ ret();
 }
@@ -2105,8 +2083,8 @@ ASSEMBLER_TEST_RUN(Fdivd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Faddd, assembler) {
-  __ LoadDImmediate(V1, 41.5, kNoPP);
-  __ LoadDImmediate(V2, 0.5, kNoPP);
+  __ LoadDImmediate(V1, 41.5);
+  __ LoadDImmediate(V2, 0.5);
   __ faddd(V0, V1, V2);
   __ ret();
 }
@@ -2119,8 +2097,8 @@ ASSEMBLER_TEST_RUN(Faddd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Fsubd, assembler) {
-  __ LoadDImmediate(V1, 42.5, kNoPP);
-  __ LoadDImmediate(V2, 0.5, kNoPP);
+  __ LoadDImmediate(V1, 42.5);
+  __ LoadDImmediate(V2, 0.5);
   __ fsubd(V0, V1, V2);
   __ ret();
 }
@@ -2134,13 +2112,13 @@ ASSEMBLER_TEST_RUN(Fsubd, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrdFstrdHeapTag, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 43.0, kNoPP);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
-  __ AddImmediate(SP, SP, -1 * kWordSize, kNoPP);
+  __ LoadDImmediate(V0, 43.0);
+  __ LoadDImmediate(V1, 42.0);
+  __ AddImmediate(SP, SP, -1 * kWordSize);
   __ add(R2, SP, Operand(1));
   __ fstrd(V1, Address(R2, -1));
   __ fldrd(V0, Address(R2, -1));
-  __ AddImmediate(SP, SP, 1 * kWordSize, kNoPP);
+  __ AddImmediate(SP, SP, 1 * kWordSize);
   __ mov(CSP, SP);
   __ ret();
 }
@@ -2154,8 +2132,8 @@ ASSEMBLER_TEST_RUN(FldrdFstrdHeapTag, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrdFstrdLargeIndex, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 43.0, kNoPP);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 43.0);
+  __ LoadDImmediate(V1, 42.0);
   // Largest negative offset that can fit in the signed 9-bit immediate field.
   __ fstrd(V1, Address(SP, -32*kWordSize, Address::PreIndex));
   // Largest positive kWordSize aligned offset that we can fit.
@@ -2175,8 +2153,8 @@ ASSEMBLER_TEST_RUN(FldrdFstrdLargeIndex, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrdFstrdLargeOffset, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 43.0, kNoPP);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 43.0);
+  __ LoadDImmediate(V1, 42.0);
   __ sub(SP, SP, Operand(512*kWordSize));
   __ fstrd(V1, Address(SP, 512*kWordSize, Address::Offset));
   __ add(SP, SP, Operand(512*kWordSize));
@@ -2194,8 +2172,8 @@ ASSEMBLER_TEST_RUN(FldrdFstrdLargeOffset, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrdFstrdExtReg, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 43.0, kNoPP);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 43.0);
+  __ LoadDImmediate(V1, 42.0);
   __ movz(R2, Immediate(0xfff8), 0);
   __ movk(R2, Immediate(0xffff), 1);  // R2 <- -8 (int32_t).
   // This should sign extend R2, and add to SP to get address,
@@ -2217,8 +2195,8 @@ ASSEMBLER_TEST_RUN(FldrdFstrdExtReg, test) {
 
 ASSEMBLER_TEST_GENERATE(FldrdFstrdScaledReg, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 43.0, kNoPP);
-  __ LoadDImmediate(V1, 42.0, kNoPP);
+  __ LoadDImmediate(V0, 43.0);
+  __ LoadDImmediate(V1, 42.0);
   __ movz(R2, Immediate(10), 0);
   __ sub(SP, SP, Operand(10*kWordSize));
   // Store V1 into SP + R2 * kWordSize.
@@ -2237,10 +2215,10 @@ ASSEMBLER_TEST_RUN(FldrdFstrdScaledReg, test) {
 
 
 ASSEMBLER_TEST_GENERATE(VinswVmovrs, assembler) {
-  __ LoadImmediate(R0, 42, kNoPP);
-  __ LoadImmediate(R1, 43, kNoPP);
-  __ LoadImmediate(R2, 44, kNoPP);
-  __ LoadImmediate(R3, 45, kNoPP);
+  __ LoadImmediate(R0, 42);
+  __ LoadImmediate(R1, 43);
+  __ LoadImmediate(R2, 44);
+  __ LoadImmediate(R3, 45);
 
   __ vinsw(V0, 0, R0);
   __ vinsw(V0, 1, R1);
@@ -2267,8 +2245,8 @@ ASSEMBLER_TEST_RUN(VinswVmovrs, test) {
 
 
 ASSEMBLER_TEST_GENERATE(VinsxVmovrd, assembler) {
-  __ LoadImmediate(R0, 42, kNoPP);
-  __ LoadImmediate(R1, 43, kNoPP);
+  __ LoadImmediate(R0, 42);
+  __ LoadImmediate(R1, 43);
 
   __ vinsx(V0, 0, R0);
   __ vinsx(V0, 1, R1);
@@ -2289,8 +2267,8 @@ ASSEMBLER_TEST_RUN(VinsxVmovrd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vnot, assembler) {
-  __ LoadImmediate(R0, 0xfffffffe, kNoPP);
-  __ LoadImmediate(R1, 0xffffffff, kNoPP);
+  __ LoadImmediate(R0, 0xfffffffe);
+  __ LoadImmediate(R1, 0xffffffff);
   __ vinsw(V1, 0, R1);
   __ vinsw(V1, 1, R0);
   __ vinsw(V1, 2, R1);
@@ -2317,8 +2295,8 @@ ASSEMBLER_TEST_RUN(Vnot, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vabss, assembler) {
-  __ LoadDImmediate(V1, 21.0, kNoPP);
-  __ LoadDImmediate(V2, -21.0, kNoPP);
+  __ LoadDImmediate(V1, 21.0);
+  __ LoadDImmediate(V2, -21.0);
 
   __ fcvtsd(V1, V1);
   __ fcvtsd(V2, V2);
@@ -2347,8 +2325,8 @@ ASSEMBLER_TEST_RUN(Vabss, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vabsd, assembler) {
-  __ LoadDImmediate(V1, 21.0, kNoPP);
-  __ LoadDImmediate(V2, -21.0, kNoPP);
+  __ LoadDImmediate(V1, 21.0);
+  __ LoadDImmediate(V2, -21.0);
 
   __ vinsd(V3, 0, V1, 0);
   __ vinsd(V3, 1, V2, 0);
@@ -2370,8 +2348,8 @@ ASSEMBLER_TEST_RUN(Vabsd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vnegs, assembler) {
-  __ LoadDImmediate(V1, 42.0, kNoPP);
-  __ LoadDImmediate(V2, -84.0, kNoPP);
+  __ LoadDImmediate(V1, 42.0);
+  __ LoadDImmediate(V2, -84.0);
 
   __ fcvtsd(V1, V1);
   __ fcvtsd(V2, V2);
@@ -2399,8 +2377,8 @@ ASSEMBLER_TEST_RUN(Vnegs, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vnegd, assembler) {
-  __ LoadDImmediate(V1, 42.0, kNoPP);
-  __ LoadDImmediate(V2, -84.0, kNoPP);
+  __ LoadDImmediate(V1, 42.0);
+  __ LoadDImmediate(V2, -84.0);
 
   __ vinsd(V3, 0, V1, 0);
   __ vinsd(V3, 1, V2, 0);
@@ -2422,10 +2400,10 @@ ASSEMBLER_TEST_RUN(Vnegd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vadds, assembler) {
-  __ LoadDImmediate(V0, 0.0, kNoPP);
-  __ LoadDImmediate(V1, 1.0, kNoPP);
-  __ LoadDImmediate(V2, 2.0, kNoPP);
-  __ LoadDImmediate(V3, 3.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
+  __ LoadDImmediate(V1, 1.0);
+  __ LoadDImmediate(V2, 2.0);
+  __ LoadDImmediate(V3, 3.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -2463,11 +2441,11 @@ ASSEMBLER_TEST_RUN(Vadds, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vsubs, assembler) {
-  __ LoadDImmediate(V0, 0.0, kNoPP);
-  __ LoadDImmediate(V1, 1.0, kNoPP);
-  __ LoadDImmediate(V2, 2.0, kNoPP);
-  __ LoadDImmediate(V3, 3.0, kNoPP);
-  __ LoadDImmediate(V5, 0.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
+  __ LoadDImmediate(V1, 1.0);
+  __ LoadDImmediate(V2, 2.0);
+  __ LoadDImmediate(V3, 3.0);
+  __ LoadDImmediate(V5, 0.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -2505,10 +2483,10 @@ ASSEMBLER_TEST_RUN(Vsubs, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vmuls, assembler) {
-  __ LoadDImmediate(V0, 0.0, kNoPP);
-  __ LoadDImmediate(V1, 1.0, kNoPP);
-  __ LoadDImmediate(V2, 2.0, kNoPP);
-  __ LoadDImmediate(V3, 3.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
+  __ LoadDImmediate(V1, 1.0);
+  __ LoadDImmediate(V2, 2.0);
+  __ LoadDImmediate(V3, 3.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -2546,10 +2524,10 @@ ASSEMBLER_TEST_RUN(Vmuls, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vdivs, assembler) {
-  __ LoadDImmediate(V0, 0.0, kNoPP);
-  __ LoadDImmediate(V1, 1.0, kNoPP);
-  __ LoadDImmediate(V2, 2.0, kNoPP);
-  __ LoadDImmediate(V3, 3.0, kNoPP);
+  __ LoadDImmediate(V0, 0.0);
+  __ LoadDImmediate(V1, 1.0);
+  __ LoadDImmediate(V2, 2.0);
+  __ LoadDImmediate(V3, 3.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -2587,8 +2565,8 @@ ASSEMBLER_TEST_RUN(Vdivs, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vaddd, assembler) {
-  __ LoadDImmediate(V0, 2.0, kNoPP);
-  __ LoadDImmediate(V1, 3.0, kNoPP);
+  __ LoadDImmediate(V0, 2.0);
+  __ LoadDImmediate(V1, 3.0);
 
   __ vinsd(V4, 0, V0, 0);
   __ vinsd(V4, 1, V1, 0);
@@ -2610,9 +2588,9 @@ ASSEMBLER_TEST_RUN(Vaddd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vsubd, assembler) {
-  __ LoadDImmediate(V0, 2.0, kNoPP);
-  __ LoadDImmediate(V1, 3.0, kNoPP);
-  __ LoadDImmediate(V5, 0.0, kNoPP);
+  __ LoadDImmediate(V0, 2.0);
+  __ LoadDImmediate(V1, 3.0);
+  __ LoadDImmediate(V5, 0.0);
 
   __ vinsd(V4, 0, V0, 0);
   __ vinsd(V4, 1, V1, 0);
@@ -2634,8 +2612,8 @@ ASSEMBLER_TEST_RUN(Vsubd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vmuld, assembler) {
-  __ LoadDImmediate(V0, 2.0, kNoPP);
-  __ LoadDImmediate(V1, 3.0, kNoPP);
+  __ LoadDImmediate(V0, 2.0);
+  __ LoadDImmediate(V1, 3.0);
 
   __ vinsd(V4, 0, V0, 0);
   __ vinsd(V4, 1, V1, 0);
@@ -2657,8 +2635,8 @@ ASSEMBLER_TEST_RUN(Vmuld, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vdivd, assembler) {
-  __ LoadDImmediate(V0, 2.0, kNoPP);
-  __ LoadDImmediate(V1, 3.0, kNoPP);
+  __ LoadDImmediate(V0, 2.0);
+  __ LoadDImmediate(V1, 3.0);
 
   __ vinsd(V4, 0, V0, 0);
   __ vinsd(V4, 1, V1, 0);
@@ -2681,7 +2659,7 @@ ASSEMBLER_TEST_RUN(Vdivd, test) {
 
 ASSEMBLER_TEST_GENERATE(Vdupd, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 21.0, kNoPP);
+  __ LoadDImmediate(V0, 21.0);
   __ vdupd(V1, V0, 0);
 
   const int dword_bytes = 1 << Log2OperandSizeBytes(kDWord);
@@ -2705,7 +2683,7 @@ ASSEMBLER_TEST_RUN(Vdupd, test) {
 
 ASSEMBLER_TEST_GENERATE(Vdups, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 21.0, kNoPP);
+  __ LoadDImmediate(V0, 21.0);
   __ fcvtsd(V0, V0);
   __ vdups(V1, V0, 0);
 
@@ -2739,7 +2717,7 @@ ASSEMBLER_TEST_RUN(Vdups, test) {
 
 ASSEMBLER_TEST_GENERATE(Vinsd, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V5, 42.0, kNoPP);
+  __ LoadDImmediate(V5, 42.0);
   __ vinsd(V1, 1, V5, 0);  // V1[1] <- V0[0].
 
   const int dword_bytes = 1 << Log2OperandSizeBytes(kDWord);
@@ -2763,7 +2741,7 @@ ASSEMBLER_TEST_RUN(Vinsd, test) {
 
 ASSEMBLER_TEST_GENERATE(Vinss, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ LoadDImmediate(V0, 21.0, kNoPP);
+  __ LoadDImmediate(V0, 21.0);
   __ fcvtsd(V0, V0);
   __ vinss(V1, 3, V0, 0);
   __ vinss(V1, 1, V0, 0);
@@ -2797,8 +2775,8 @@ ASSEMBLER_TEST_RUN(Vinss, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vand, assembler) {
-  __ LoadDImmediate(V1, 21.0, kNoPP);
-  __ LoadImmediate(R0, 0xffffffff, kNoPP);
+  __ LoadDImmediate(V1, 21.0);
+  __ LoadImmediate(R0, 0xffffffff);
 
   // V0 <- (0, 0xffffffff, 0, 0xffffffff)
   __ fmovdr(V0, R0);
@@ -2834,7 +2812,7 @@ ASSEMBLER_TEST_RUN(Vand, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vorr, assembler) {
-  __ LoadDImmediate(V1, 10.5, kNoPP);
+  __ LoadDImmediate(V1, 10.5);
   __ fcvtsd(V1, V1);
 
   // V0 <- (0, 10.5, 0, 10.5)
@@ -2872,8 +2850,8 @@ ASSEMBLER_TEST_RUN(Vorr, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Veor, assembler) {
-  __ LoadImmediate(R1, 0xffffffff, kNoPP);
-  __ LoadImmediate(R2, ~21, kNoPP);
+  __ LoadImmediate(R1, 0xffffffff);
+  __ LoadImmediate(R2, ~21);
 
   __ vinsw(V1, 0, R1);
   __ vinsw(V1, 1, R2);
@@ -2906,7 +2884,7 @@ ASSEMBLER_TEST_RUN(Veor, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vaddw, assembler) {
-  __ LoadImmediate(R4, 21, kNoPP);
+  __ LoadImmediate(R4, 21);
 
   __ vdupw(V1, R4);
   __ vdupw(V2, R4);
@@ -2931,8 +2909,8 @@ ASSEMBLER_TEST_RUN(Vaddw, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vsubw, assembler) {
-  __ LoadImmediate(R4, 31, kNoPP);
-  __ LoadImmediate(R5, 10, kNoPP);
+  __ LoadImmediate(R4, 31);
+  __ LoadImmediate(R5, 10);
 
   __ vdupw(V1, R4);
   __ vdupw(V2, R5);
@@ -2957,7 +2935,7 @@ ASSEMBLER_TEST_RUN(Vsubw, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vaddx, assembler) {
-  __ LoadImmediate(R4, 21, kNoPP);
+  __ LoadImmediate(R4, 21);
 
   __ vdupx(V1, R4);
   __ vdupx(V2, R4);
@@ -2978,8 +2956,8 @@ ASSEMBLER_TEST_RUN(Vaddx, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vsubx, assembler) {
-  __ LoadImmediate(R4, 31, kNoPP);
-  __ LoadImmediate(R5, 10, kNoPP);
+  __ LoadImmediate(R4, 31);
+  __ LoadImmediate(R5, 10);
 
   __ vdupx(V1, R4);
   __ vdupx(V2, R5);
@@ -3000,8 +2978,8 @@ ASSEMBLER_TEST_RUN(Vsubx, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vceqs, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, -42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, -42.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -3033,8 +3011,8 @@ ASSEMBLER_TEST_RUN(Vceqs, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vceqd, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, -42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, -42.0);
 
   __ vdupd(V2, V0, 0);
   __ vinsd(V3, 0, V0, 0);
@@ -3057,8 +3035,8 @@ ASSEMBLER_TEST_RUN(Vceqd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vcgts, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, -42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, -42.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -3090,8 +3068,8 @@ ASSEMBLER_TEST_RUN(Vcgts, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vcgtd, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, -42.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, -42.0);
 
   __ vdupd(V2, V0, 0);
   __ vinsd(V3, 0, V0, 0);
@@ -3114,8 +3092,8 @@ ASSEMBLER_TEST_RUN(Vcgtd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vcges, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, 43.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, 43.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -3147,8 +3125,8 @@ ASSEMBLER_TEST_RUN(Vcges, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vcged, assembler) {
-  __ LoadDImmediate(V0, 42.0, kNoPP);
-  __ LoadDImmediate(V1, 43.0, kNoPP);
+  __ LoadDImmediate(V0, 42.0);
+  __ LoadDImmediate(V1, 43.0);
 
   __ vdupd(V2, V0, 0);
   __ vinsd(V3, 0, V0, 0);
@@ -3171,8 +3149,8 @@ ASSEMBLER_TEST_RUN(Vcged, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vmaxs, assembler) {
-  __ LoadDImmediate(V0, 10.5, kNoPP);
-  __ LoadDImmediate(V1, 10.0, kNoPP);
+  __ LoadDImmediate(V0, 10.5);
+  __ LoadDImmediate(V1, 10.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -3209,8 +3187,8 @@ ASSEMBLER_TEST_RUN(Vmaxs, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vmaxd, assembler) {
-  __ LoadDImmediate(V0, 21.0, kNoPP);
-  __ LoadDImmediate(V1, 20.5, kNoPP);
+  __ LoadDImmediate(V0, 21.0);
+  __ LoadDImmediate(V1, 20.5);
 
   __ vdupd(V2, V0, 0);
   __ vinsd(V3, 0, V0, 0);
@@ -3233,8 +3211,8 @@ ASSEMBLER_TEST_RUN(Vmaxd, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vmins, assembler) {
-  __ LoadDImmediate(V0, 10.5, kNoPP);
-  __ LoadDImmediate(V1, 11.0, kNoPP);
+  __ LoadDImmediate(V0, 10.5);
+  __ LoadDImmediate(V1, 11.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -3271,8 +3249,8 @@ ASSEMBLER_TEST_RUN(Vmins, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vmind, assembler) {
-  __ LoadDImmediate(V0, 21.0, kNoPP);
-  __ LoadDImmediate(V1, 21.5, kNoPP);
+  __ LoadDImmediate(V0, 21.0);
+  __ LoadDImmediate(V1, 21.5);
 
   __ vdupd(V2, V0, 0);
   __ vinsd(V3, 0, V0, 0);
@@ -3295,8 +3273,8 @@ ASSEMBLER_TEST_RUN(Vmind, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vsqrts, assembler) {
-  __ LoadDImmediate(V0, 64.0, kNoPP);
-  __ LoadDImmediate(V1, 49.0, kNoPP);
+  __ LoadDImmediate(V0, 64.0);
+  __ LoadDImmediate(V1, 49.0);
 
   __ fcvtsd(V0, V0);
   __ fcvtsd(V1, V1);
@@ -3325,8 +3303,8 @@ ASSEMBLER_TEST_RUN(Vsqrts, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vsqrtd, assembler) {
-  __ LoadDImmediate(V0, 64.0, kNoPP);
-  __ LoadDImmediate(V1, 49.0, kNoPP);
+  __ LoadDImmediate(V0, 64.0);
+  __ LoadDImmediate(V1, 49.0);
 
   __ vinsd(V3, 0, V0, 0);
   __ vinsd(V3, 1, V1, 0);
@@ -3383,7 +3361,7 @@ static float arm_recip_estimate(float a) {
 
 
 ASSEMBLER_TEST_GENERATE(Vrecpes, assembler) {
-  __ LoadDImmediate(V1, 147.0, kNoPP);
+  __ LoadDImmediate(V1, 147.0);
   __ fcvtsd(V1, V1);
   __ vinss(V2, 0, V1, 0);
   __ vinss(V2, 1, V1, 0);
@@ -3404,8 +3382,8 @@ ASSEMBLER_TEST_RUN(Vrecpes, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vrecpss, assembler) {
-  __ LoadDImmediate(V1, 5.0, kNoPP);
-  __ LoadDImmediate(V2, 10.0, kNoPP);
+  __ LoadDImmediate(V1, 5.0);
+  __ LoadDImmediate(V2, 10.0);
 
   __ fcvtsd(V1, V1);
   __ fcvtsd(V2, V2);
@@ -3426,7 +3404,7 @@ ASSEMBLER_TEST_RUN(Vrecpss, test) {
 
 
 ASSEMBLER_TEST_GENERATE(VRecps, assembler) {
-  __ LoadDImmediate(V0, 1.0 / 10.5, kNoPP);
+  __ LoadDImmediate(V0, 1.0 / 10.5);
   __ fcvtsd(V0, V0);
 
   __ vdups(V1, V0, 0);
@@ -3509,7 +3487,7 @@ static float arm_reciprocal_sqrt_estimate(float a) {
 
 
 ASSEMBLER_TEST_GENERATE(Vrsqrtes, assembler) {
-  __ LoadDImmediate(V1, 147.0, kNoPP);
+  __ LoadDImmediate(V1, 147.0);
   __ fcvtsd(V1, V1);
 
   __ vrsqrtes(V0, V1);
@@ -3528,8 +3506,8 @@ ASSEMBLER_TEST_RUN(Vrsqrtes, test) {
 
 
 ASSEMBLER_TEST_GENERATE(Vrsqrtss, assembler) {
-    __ LoadDImmediate(V1, 5.0, kNoPP);
-    __ LoadDImmediate(V2, 10.0, kNoPP);
+    __ LoadDImmediate(V1, 5.0);
+    __ LoadDImmediate(V2, 10.0);
 
     __ fcvtsd(V1, V1);
     __ fcvtsd(V2, V2);
@@ -3550,7 +3528,7 @@ ASSEMBLER_TEST_RUN(Vrsqrtss, test) {
 
 
 ASSEMBLER_TEST_GENERATE(ReciprocalSqrt, assembler) {
-    __ LoadDImmediate(V1, 147000.0, kNoPP);
+    __ LoadDImmediate(V1, 147000.0);
     __ fcvtsd(V1, V1);
 
     __ VRSqrts(V0, V1);
@@ -3570,26 +3548,19 @@ ASSEMBLER_TEST_RUN(ReciprocalSqrt, test) {
 
 // Called from assembler_test.cc.
 // LR: return address.
-// R0: context.
-// R1: value.
-// R2: growable array.
-// R3: current thread.
+// R0: value.
+// R1: growable array.
+// R2: current thread.
 ASSEMBLER_TEST_GENERATE(StoreIntoObject, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ TagAndPushPP();
-  __ LoadPoolPointer(PP);
   __ Push(THR);
-  __ Push(CTX);
   __ Push(LR);
-  __ mov(CTX, R0);
-  __ mov(THR, R3);
-  __ StoreIntoObject(R2,
-                     FieldAddress(R2, GrowableObjectArray::data_offset()),
-                     R1);
+  __ mov(THR, R2);
+  __ StoreIntoObject(R1,
+                     FieldAddress(R1, GrowableObjectArray::data_offset()),
+                     R0);
   __ Pop(LR);
-  __ Pop(CTX);
   __ Pop(THR);
-  __ PopAndUntagPP();
   __ mov(CSP, SP);
   __ ret();
 }
@@ -3597,59 +3568,60 @@ ASSEMBLER_TEST_GENERATE(StoreIntoObject, assembler) {
 
 ASSEMBLER_TEST_GENERATE(ComputeRange, assembler) {
   __ SetupDartSP(kTestStackSpace);
-  __ TagAndPushPP();
-  __ LoadPoolPointer(PP);
+  __ EnterStubFrame();
   Label miss, done;
   __ mov(R1, R0);
   __ ComputeRange(R0, R1, R2, &miss);
   __ b(&done);
 
   __ Bind(&miss);
-  __ LoadImmediate(R0, -1, kNoPP);
+  __ LoadImmediate(R0, -1);
 
   __ Bind(&done);
-  __ PopAndUntagPP();
+  __ LeaveStubFrame();
   __ mov(CSP, SP);
   __ ret();
 }
 
 
 ASSEMBLER_TEST_RUN(ComputeRange, test) {
-  typedef intptr_t (*ComputeRange)(intptr_t value) DART_UNUSED;
+#define RANGE_OF(arg_type, v) test->Invoke<intptr_t, arg_type>(v)
 
-#define RANGE_OF(v)                                              \
-  (EXECUTE_TEST_CODE_INTPTR_INTPTR(                              \
-    ComputeRange, test->entry(), reinterpret_cast<intptr_t>(v)))
-
-  EXPECT_EQ(ICData::kInt32RangeBit, RANGE_OF(Smi::New(0)));
-  EXPECT_EQ(ICData::kInt32RangeBit, RANGE_OF(Smi::New(1)));
-  EXPECT_EQ(ICData::kInt32RangeBit, RANGE_OF(Smi::New(kMaxInt32)));
+  EXPECT_EQ(ICData::kInt32RangeBit, RANGE_OF(RawSmi*, Smi::New(0)));
+  EXPECT_EQ(ICData::kInt32RangeBit, RANGE_OF(RawSmi*, Smi::New(1)));
+  EXPECT_EQ(ICData::kInt32RangeBit, RANGE_OF(RawSmi*, Smi::New(kMaxInt32)));
   EXPECT_EQ(ICData::kInt32RangeBit | ICData::kSignedRangeBit,
-            RANGE_OF(Smi::New(-1)));
+            RANGE_OF(RawSmi*, Smi::New(-1)));
   EXPECT_EQ(ICData::kInt32RangeBit | ICData::kSignedRangeBit,
-            RANGE_OF(Smi::New(kMinInt32)));
+            RANGE_OF(RawSmi*, Smi::New(kMinInt32)));
 
   EXPECT_EQ(ICData::kUint32RangeBit,
-            RANGE_OF(Smi::New(static_cast<int64_t>(kMaxInt32) + 1)));
+            RANGE_OF(RawSmi*, Smi::New(static_cast<int64_t>(kMaxInt32) + 1)));
   EXPECT_EQ(ICData::kUint32RangeBit,
-            RANGE_OF(Smi::New(kMaxUint32)));
+            RANGE_OF(RawSmi*, Smi::New(kMaxUint32)));
 
   // On 64-bit platforms we don't track the sign of the smis outside of
   // int32 range because it is not needed to distinguish kInt32Range from
   // kUint32Range.
   EXPECT_EQ(ICData::kSignedRangeBit,
-            RANGE_OF(Smi::New(static_cast<int64_t>(kMinInt32) - 1)));
+            RANGE_OF(RawSmi*, Smi::New(static_cast<int64_t>(kMinInt32) - 1)));
   EXPECT_EQ(ICData::kSignedRangeBit,
-            RANGE_OF(Smi::New(static_cast<int64_t>(kMaxUint32) + 1)));
-  EXPECT_EQ(ICData::kSignedRangeBit, RANGE_OF(Smi::New(Smi::kMaxValue)));
-  EXPECT_EQ(ICData::kSignedRangeBit, RANGE_OF(Smi::New(Smi::kMinValue)));
+            RANGE_OF(RawSmi*, Smi::New(static_cast<int64_t>(kMaxUint32) + 1)));
+  EXPECT_EQ(ICData::kSignedRangeBit,
+            RANGE_OF(RawSmi*, Smi::New(Smi::kMaxValue)));
+  EXPECT_EQ(ICData::kSignedRangeBit, RANGE_OF(RawSmi*,
+            Smi::New(Smi::kMinValue)));
 
-  EXPECT_EQ(ICData::kInt64RangeBit, RANGE_OF(Integer::New(Smi::kMaxValue + 1)));
-  EXPECT_EQ(ICData::kInt64RangeBit, RANGE_OF(Integer::New(Smi::kMinValue - 1)));
-  EXPECT_EQ(ICData::kInt64RangeBit, RANGE_OF(Integer::New(kMaxInt64)));
-  EXPECT_EQ(ICData::kInt64RangeBit, RANGE_OF(Integer::New(kMinInt64)));
+  EXPECT_EQ(ICData::kInt64RangeBit,
+            RANGE_OF(RawInteger*, Integer::New(Smi::kMaxValue + 1)));
+  EXPECT_EQ(ICData::kInt64RangeBit,
+            RANGE_OF(RawInteger*, Integer::New(Smi::kMinValue - 1)));
+  EXPECT_EQ(ICData::kInt64RangeBit,
+            RANGE_OF(RawInteger*, Integer::New(kMaxInt64)));
+  EXPECT_EQ(ICData::kInt64RangeBit,
+            RANGE_OF(RawInteger*, Integer::New(kMinInt64)));
 
-  EXPECT_EQ(-1, RANGE_OF(Bool::True().raw()));
+  EXPECT_EQ(-1, RANGE_OF(RawBool*, Bool::True().raw()));
 
 #undef RANGE_OF
 }

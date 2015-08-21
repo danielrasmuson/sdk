@@ -5,6 +5,7 @@
 library test.operation.queue;
 
 import 'package:analysis_server/src/analysis_server.dart';
+import 'package:analysis_server/src/context_manager.dart';
 import 'package:analysis_server/src/operation/operation.dart';
 import 'package:analysis_server/src/operation/operation_analysis.dart';
 import 'package:analysis_server/src/operation/operation_queue.dart';
@@ -17,9 +18,10 @@ import 'package:typed_mock/typed_mock.dart';
 import 'package:unittest/unittest.dart';
 
 import '../mocks.dart';
+import '../utils.dart';
 
 main() {
-  groupSep = ' | ';
+  initializeTestEnvironment();
   defineReflectiveTests(ServerOperationQueueTest);
 }
 
@@ -39,7 +41,6 @@ class AnalysisContextMock extends TypedMock implements InternalAnalysisContext {
 }
 
 class AnalysisServerMock extends TypedMock implements AnalysisServer {
-
   @override
   final ResourceProvider resourceProvider;
 
@@ -51,8 +52,7 @@ class AnalysisServerMock extends TypedMock implements AnalysisServer {
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class ServerContextManagerMock extends TypedMock
-    implements ServerContextManager {
+class ServerContextManagerMock extends TypedMock implements ContextManager {
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

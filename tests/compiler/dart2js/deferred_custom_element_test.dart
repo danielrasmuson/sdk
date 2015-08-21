@@ -7,13 +7,15 @@
 // much be included in the initial download (loaded eagerly).
 
 import 'package:async_helper/async_helper.dart';
-import 'package:compiler/src/dart2jslib.dart';
+import 'package:compiler/src/compiler.dart';
 import 'package:expect/expect.dart';
 import 'memory_compiler.dart';
 
 void main() {
-  Compiler compiler = compilerFor(MEMORY_SOURCE_FILES);
-  asyncTest(() => compiler.run(Uri.parse('memory:main.dart')).then((_) {
+  asyncTest(() async {
+    CompilationResult result =
+        await runCompiler(memorySourceFiles: MEMORY_SOURCE_FILES);
+    Compiler compiler = result.compiler;
     var outputUnitForElement = compiler.deferredLoadTask.outputUnitForElement;
     var mainOutputUnit = compiler.deferredLoadTask.mainOutputUnit;
     var lib =
@@ -23,7 +25,7 @@ void main() {
     Expect.notEquals(mainOutputUnit, outputUnitForElement(foo));
     // Native elements are not deferred
     Expect.equals(mainOutputUnit, outputUnitForElement(customType));
-  }));
+  });
 }
 
 // The main library imports a file defining a custom element.

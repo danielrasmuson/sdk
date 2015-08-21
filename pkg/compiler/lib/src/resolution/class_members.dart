@@ -2,24 +2,28 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library resolution.compute_members;
+library dart2js.resolution.compute_members;
 
-import '../elements/elements.dart'
-    show Element,
-         Name,
-         PublicName,
-         Member,
-         MemberElement,
-         MemberSignature,
-         LibraryElement,
-         ClassElement,
-         MixinApplicationElement;
+import '../common/names.dart' show
+    Identifiers;
+import '../compiler.dart' show
+    Compiler,
+    isPrivateName;
 import '../dart_types.dart';
-import '../dart2jslib.dart'
-    show Compiler,
-         MessageKind,
-         invariant,
-         isPrivateName;
+import '../diagnostics/invariant.dart' show
+    invariant;
+import '../diagnostics/messages.dart' show
+    MessageKind;
+import '../elements/elements.dart' show
+    ClassElement,
+    Element,
+    LibraryElement,
+    Member,
+    MemberElement,
+    MemberSignature,
+    MixinApplicationElement,
+    Name,
+    PublicName;
 import '../util/util.dart';
 
 part 'member_impl.dart';
@@ -58,7 +62,8 @@ abstract class MembersCreator {
 
   bool shouldSkipName(String name) {
     return computedMemberNames != null &&
-           computedMemberNames.contains(name);
+           // 'call' is implicitly contained in [computedMemberNames].
+           (name == Identifiers.call || computedMemberNames.contains(name));
   }
 
   /// Compute all members of [cls] with the given names.
@@ -304,7 +309,7 @@ abstract class MembersCreator {
     assert(!cls.isAbstract);
 
     if (cls.asInstanceOf(compiler.functionClass) == null) return;
-    if (cls.lookupMember(Compiler.CALL_OPERATOR_NAME) != null) return;
+    if (cls.lookupMember(Identifiers.call) != null) return;
     // TODO(johnniwinther): Make separate methods for backend exceptions.
     // Avoid warnings on backend implementation classes for closures.
     if (compiler.backend.isBackendLibrary(cls.library)) return;
@@ -312,8 +317,8 @@ abstract class MembersCreator {
     reportMessage(compiler.functionClass, MessageKind.UNIMPLEMENTED_METHOD, () {
       compiler.reportWarning(cls, MessageKind.UNIMPLEMENTED_METHOD_ONE,
           {'class': cls.name,
-           'name': Compiler.CALL_OPERATOR_NAME,
-           'method': Compiler.CALL_OPERATOR_NAME,
+           'name': Identifiers.call,
+           'method': Identifiers.call,
            'declarer': compiler.functionClass.name});
     });
   }
@@ -843,7 +848,7 @@ abstract class ClassMemberMixin implements ClassElement {
     if (computedMemberNames == null) {
       computedMemberNames = _EMPTY_MEMBERS_NAMES;
     }
-    if (name != Compiler.CALL_OPERATOR_NAME) {
+    if (name != Identifiers.call) {
       Setlet<String> set;
       if (identical(computedMemberNames, _EMPTY_MEMBERS_NAMES)) {
         computedMemberNames = set = new Setlet<String>();
@@ -870,7 +875,7 @@ abstract class ClassMemberMixin implements ClassElement {
     if (computedMemberNames == null) {
       return classMembers != null;
     } else {
-      return name == Compiler.CALL_OPERATOR_NAME ||
+      return name == Identifiers.call ||
              computedMemberNames.contains(name);
     }
   }

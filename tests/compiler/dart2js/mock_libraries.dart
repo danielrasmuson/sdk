@@ -196,6 +196,7 @@ const Map<String, String> DEFAULT_JS_HELPER_LIBRARY = const <String, String>{
   'patch': 'const patch = const _Patch(null);',
   'patch_full': 'const patch_full = const _Patch("full");',
   'patch_lazy': 'const patch_lazy = const _Patch("lazy");',
+  'patch_startup': 'const patch_startup = const _Patch("startup");',
   'propertyTypeCast': 'propertyTypeCast(x) {}',
   'propertyTypeCheck': 'propertyTypeCheck(value, property) {}',
   'requiresPreamble': 'requiresPreamble() {}',
@@ -383,6 +384,12 @@ const Map<String, String> DEFAULT_ASYNC_LIBRARY = const <String, String>{
   'Stream': 'class Stream<T> {}',
   'Completer': 'class Completer<T> {}',
   'StreamIterator': 'class StreamIterator<T> {}',
+};
+
+/// These members are only needed when async/await is used.
+const Map<String, String> ASYNC_AWAIT_LIBRARY = const <String, String>{
+  '_wrapJsFunctionForAsync': '_wrapJsFunctionForAsync(f) {}',
+  '_asyncHelper': '_asyncHelper(o, f, c) {}',
 };
 
 const Map<String, String> DEFAULT_MIRRORS_LIBRARY = const <String, String>{

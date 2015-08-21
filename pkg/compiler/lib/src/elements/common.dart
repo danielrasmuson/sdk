@@ -6,9 +6,17 @@
 
 library elements.common;
 
-import '../dart2jslib.dart' show Compiler, isPrivateName;
-import '../dart_types.dart' show DartType, InterfaceType, FunctionType;
-import '../util/util.dart' show Link;
+import '../common/names.dart' show
+    Names;
+import '../compiler.dart' show
+    Compiler,
+    isPrivateName;
+import '../dart_types.dart' show
+    DartType,
+    InterfaceType,
+    FunctionType;
+import '../util/util.dart' show
+    Link;
 
 import 'elements.dart';
 
@@ -427,8 +435,7 @@ abstract class ClassElementCommon implements ClassElement {
   }
 
   FunctionType get callType {
-    MemberSignature member =
-        lookupInterfaceMember(const PublicName(Compiler.CALL_OPERATOR_NAME));
+    MemberSignature member = lookupInterfaceMember(Names.call);
     return member != null && member.isMethod ? member.type : null;
   }
 }

@@ -15,10 +15,8 @@ namespace dart {
 CallPattern::CallPattern(uword pc, const Code& code)
     : object_pool_(ObjectPool::Handle(code.GetObjectPool())),
       end_(pc),
-      args_desc_load_end_(0),
       ic_data_load_end_(0),
       target_address_pool_index_(-1),
-      args_desc_(Array::Handle()),
       ic_data_(ICData::Handle()) {
   ASSERT(code.ContainsInstructionAt(pc));
   // Last instruction: jalr RA, T9(=R25).
@@ -118,9 +116,7 @@ uword InstructionPattern::DecodeLoadWordFromPool(uword end,
     // Offset is signed, so add the upper 16 bits.
     offset += (instr->UImmField() << 16);
   }
-  offset += kHeapObjectTag;
-  ASSERT(Utils::IsAligned(offset, 4));
-  *index = (offset - Array::data_offset()) / 4;
+  *index = ObjectPool::IndexFromOffset(offset);
   return start;
 }
 
@@ -128,28 +124,13 @@ uword InstructionPattern::DecodeLoadWordFromPool(uword end,
 RawICData* CallPattern::IcData() {
   if (ic_data_.IsNull()) {
     Register reg;
-    args_desc_load_end_ =
-        InstructionPattern::DecodeLoadObject(ic_data_load_end_,
-                                             object_pool_,
-                                             &reg,
-                                             &ic_data_);
+    InstructionPattern::DecodeLoadObject(ic_data_load_end_,
+                                         object_pool_,
+                                         &reg,
+                                         &ic_data_);
     ASSERT(reg == S5);
   }
   return ic_data_.raw();
-}
-
-
-RawArray* CallPattern::ClosureArgumentsDescriptor() {
-  if (args_desc_.IsNull()) {
-    IcData();  // Loading of the ic_data must be decoded first, if not already.
-    Register reg;
-    InstructionPattern::DecodeLoadObject(args_desc_load_end_,
-                                         object_pool_,
-                                         &reg,
-                                         &args_desc_);
-    ASSERT(reg == S4);
-  }
-  return args_desc_.raw();
 }
 
 

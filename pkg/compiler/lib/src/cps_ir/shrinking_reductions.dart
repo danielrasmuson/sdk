@@ -14,14 +14,14 @@ import 'optimizers.dart';
 class ShrinkingReducer extends Pass {
   String get passName => 'Shrinking reductions';
 
-  Set<_ReductionTask> _worklist;
+  List<_ReductionTask> _worklist;
 
   static final _DeletedNode _DELETED = new _DeletedNode();
 
   /// Applies shrinking reductions to root, mutating root in the process.
   @override
   void rewrite(FunctionDefinition root) {
-    _worklist = new Set<_ReductionTask>();
+    _worklist = new List<_ReductionTask>();
     _RedexVisitor redexVisitor = new _RedexVisitor(_worklist);
 
     // Set all parent pointers.
@@ -32,8 +32,7 @@ class ShrinkingReducer extends Pass {
 
     // Process the worklist.
     while (_worklist.isNotEmpty) {
-      _ReductionTask task = _worklist.first;
-      _worklist.remove(task);
+      _ReductionTask task = _worklist.removeLast();
       _processTask(task);
     }
   }
@@ -400,7 +399,7 @@ bool _isDeadParameter(Parameter parameter) {
 
 /// Traverses a term and adds any found redexes to the worklist.
 class _RedexVisitor extends RecursiveVisitor {
-  final Set<_ReductionTask> worklist;
+  final List<_ReductionTask> worklist;
 
   _RedexVisitor(this.worklist);
 
@@ -446,7 +445,7 @@ class _RedexVisitor extends RecursiveVisitor {
 /// any corresponding tasks can be skipped.  Nodes are marked so by setting
 /// their parent to the deleted sentinel.
 class _RemovalVisitor extends RecursiveVisitor {
-  final Set<_ReductionTask> worklist;
+  final List<_ReductionTask> worklist;
 
   _RemovalVisitor(this.worklist);
 
@@ -574,9 +573,8 @@ class ParentVisitor extends RecursiveVisitor {
     node.value.parent = node;
   }
 
-  processSetMutableVariable(SetMutableVariable node) {
+  processSetMutable(SetMutable node) {
     node.variable.parent = node;
-    node.body.parent = node;
     node.value.parent = node;
   }
 
@@ -623,7 +621,6 @@ class ParentVisitor extends RecursiveVisitor {
   processSetField(SetField node) {
     node.object.parent = node;
     node.value.parent = node;
-    node.body.parent = node;
   }
 
   processGetField(GetField node) {
@@ -635,10 +632,9 @@ class ParentVisitor extends RecursiveVisitor {
 
   processSetStatic(SetStatic node) {
     node.value.parent = node;
-    node.body.parent = node;
   }
 
-  processGetMutableVariable(GetMutableVariable node) {
+  processGetMutable(GetMutable node) {
     node.variable.parent = node;
   }
 
@@ -670,6 +666,11 @@ class ParentVisitor extends RecursiveVisitor {
     node.arguments.forEach((Reference ref) => ref.parent = node);
   }
 
+  processApplyBuiltinMethod(ApplyBuiltinMethod node) {
+    node.receiver.parent = node;
+    node.arguments.forEach((Reference ref) => ref.parent = node);
+  }
+
   processForeignCode(ForeignCode node) {
     if (node.continuation != null) {
       node.continuation.parent = node;
@@ -690,6 +691,11 @@ class ParentVisitor extends RecursiveVisitor {
     node.object.parent = node;
     node.index.parent = node;
     node.value.parent = node;
+  }
+
+  processAwait(Await node) {
+    node.continuation.parent = node;
+    node.input.parent = node;
   }
 }
 

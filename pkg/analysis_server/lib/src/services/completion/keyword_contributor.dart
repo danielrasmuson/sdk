@@ -124,15 +124,8 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
           !node.directives.any((d) => d is LibraryDirective)) {
         _addSuggestions([Keyword.LIBRARY], DART_RELEVANCE_HIGH);
       }
-      _addSuggestions([Keyword.EXPORT, Keyword.PART], DART_RELEVANCE_HIGH);
-      _addSuggestion2("import '';",
-          offset: 8, relevance: DART_RELEVANCE_HIGH + 1);
-      _addSuggestion2("import '' as ;",
-          offset: 8, relevance: DART_RELEVANCE_HIGH);
-      _addSuggestion2("import '' hide ;",
-          offset: 8, relevance: DART_RELEVANCE_HIGH);
-      _addSuggestion2("import '' show ;",
-          offset: 8, relevance: DART_RELEVANCE_HIGH);
+      _addSuggestions(
+          [Keyword.IMPORT, Keyword.EXPORT, Keyword.PART], DART_RELEVANCE_HIGH);
     }
     if (entity == null || entity is Declaration) {
       if (previousMember is FunctionDeclaration &&
@@ -141,14 +134,6 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
         _addSuggestion2(ASYNC, relevance: DART_RELEVANCE_HIGH);
       }
       _addCompilationUnitKeywords();
-    }
-  }
-
-  @override
-  visitPropertyAccess(PropertyAccess node) {
-    // suggestions before '.' but not after
-    if (entity != node.propertyName) {
-      super.visitPropertyAccess(node);
     }
   }
 
@@ -165,11 +150,35 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
   }
 
   @override
+  visitForEachStatement(ForEachStatement node) {
+    if (entity == node.inKeyword) {
+      Token previous = node.inKeyword.previous;
+      if (previous is SyntheticStringToken && previous.lexeme == 'in') {
+        previous = previous.previous;
+      }
+      if (previous != null && previous.type == TokenType.EQ) {
+        _addSuggestions(
+            [Keyword.FALSE, Keyword.NEW, Keyword.NULL, Keyword.TRUE]);
+      } else {
+        _addSuggestion(Keyword.IN, DART_RELEVANCE_HIGH);
+      }
+    }
+  }
+
+  @override
   visitFormalParameterList(FormalParameterList node) {
     AstNode constructorDecl =
         node.getAncestor((p) => p is ConstructorDeclaration);
     if (constructorDecl != null) {
       _addSuggestions([Keyword.THIS]);
+    }
+  }
+
+  @override
+  visitForStatement(ForStatement node) {
+    if (entity == node.rightSeparator && entity.toString() != ';') {
+      // Handle the degenerate case while typing - for (int x i^)
+      _addSuggestion(Keyword.IN, DART_RELEVANCE_HIGH);
     }
   }
 
@@ -203,7 +212,12 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
         _addSuggestion(Keyword.DEFERRED, DART_RELEVANCE_HIGH);
       }
     }
-    if (entity == node.semicolon || node.combinators.contains(entity)) {
+    // Handle degenerate case where import statement does not have a semicolon
+    // and the cursor is in the uri string
+    if ((entity == node.semicolon &&
+            node.uri != null &&
+            node.uri.offset + 1 != request.offset) ||
+        node.combinators.contains(entity)) {
       _addImportDirectiveKeywords(node);
     }
   }
@@ -259,6 +273,14 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
   visitPrefixedIdentifier(PrefixedIdentifier node) {
     if (entity != node.identifier) {
       _addExpressionKeywords(node);
+    }
+  }
+
+  @override
+  visitPropertyAccess(PropertyAccess node) {
+    // suggestions before '.' but not after
+    if (entity != node.propertyName) {
+      super.visitPropertyAccess(node);
     }
   }
 
@@ -355,10 +377,22 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
   }
 
   void _addImportDirectiveKeywords(ImportDirective node) {
-    if (node.asKeyword == null) {
+    bool hasDeferredKeyword = node.deferredKeyword != null;
+    bool hasAsKeyword = node.asKeyword != null;
+    if (!hasAsKeyword) {
       _addSuggestion(Keyword.AS, DART_RELEVANCE_HIGH);
-      if (node.deferredKeyword == null) {
+    }
+    if (!hasDeferredKeyword) {
+      if (!hasAsKeyword) {
+        _addSuggestion2('deferred as', relevance: DART_RELEVANCE_HIGH);
+      } else if (entity == node.asKeyword) {
         _addSuggestion(Keyword.DEFERRED, DART_RELEVANCE_HIGH);
+      }
+    }
+    if (!hasDeferredKeyword || hasAsKeyword) {
+      if (node.combinators.isEmpty) {
+        _addSuggestion2('show', relevance: DART_RELEVANCE_HIGH);
+        _addSuggestion2('hide', relevance: DART_RELEVANCE_HIGH);
       }
     }
   }
@@ -375,7 +409,7 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
       Keyword.CONTINUE,
       Keyword.DO,
       Keyword.FINAL,
-      //Keyword.FOR,
+      Keyword.FOR,
       Keyword.IF,
       Keyword.NEW,
       Keyword.RETURN,
@@ -386,7 +420,6 @@ class _KeywordVisitor extends GeneralizingAstVisitor {
       Keyword.VOID,
       Keyword.WHILE
     ]);
-    _addSuggestion2('for ()', offset: 5);
     _addSuggestion(Keyword.RETHROW, DART_RELEVANCE_KEYWORD - 1);
   }
 
