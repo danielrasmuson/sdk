@@ -44,7 +44,7 @@ Future<HttpServer> startServer() {
   });
 }
 
-void main() async {
+main() async {
   List<int> message = "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n".codeUnits;
   int written = 0;
   List<int> body = <int>[];
