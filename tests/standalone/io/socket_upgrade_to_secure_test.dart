@@ -227,7 +227,6 @@ main() {
   asyncStart();
   InternetAddress.lookup("localhost").then((hosts) {
     HOST = hosts.first;
-    HOST = "localhost";
     test(false, false);
     // TODO(whesse): Enable the test with all argument combinations:
     //  test(true, false);

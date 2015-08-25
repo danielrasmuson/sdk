@@ -69,8 +69,7 @@ void main() {
       Expect.isTrue(clientScript.endsWith("_client.dart"));
       Process.run(Platform.executable,
                   [clientScript,
-                   server.port.toString(),
-                   certificateDatabase()])
+                   server.port.toString()])
         .then((ProcessResult result) {
           if (result.exitCode != 0) {
             print("Client failed, stdout:");

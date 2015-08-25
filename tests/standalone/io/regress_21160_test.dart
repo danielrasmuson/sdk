@@ -29,14 +29,14 @@ Future<SecureServerSocket> startServer() {
                                  0,
                                  serverContext).then((server) {
     server.listen((SecureSocket request) async {
-      await request.drain()
+      await request.drain();
       request..add(DATA)..close();
     });
     return server;
   });
 }
 
-void main() async {
+main() async {
   asyncStart();
   var server = await SecureServerSocket.bind("localhost", 0, serverContext);
   server.listen((SecureSocket request) async {

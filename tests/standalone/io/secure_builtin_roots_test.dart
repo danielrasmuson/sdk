@@ -30,7 +30,7 @@ Future testGoogleUrl(SecurityContext context, String outcome) async {
 }
 
 
-void main() async {
+main() async {
   asyncStart();
   await testGoogleUrl(null, "pass");
   await testGoogleUrl(SecurityContext.defaultContext, "pass");
