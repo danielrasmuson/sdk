@@ -59,8 +59,7 @@ class SSLFilter {
         handshake_complete_(NULL),
         bad_certificate_callback_(NULL),
         in_handshake_(false),
-        hostname_(NULL),
-        certificate_checking_parameters_(NULL) { }
+        hostname_(NULL) { }
 
   void Init(Dart_Handle dart_this);
   void Connect(const char* hostname,

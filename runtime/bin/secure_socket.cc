@@ -321,15 +321,10 @@ void FUNCTION_NAME(SecurityContext_Allocate)(Dart_NativeArguments args) {
 
 int PasswordCallback(char* buf, int size, int rwflag, void* userdata) {
   char* password = static_cast<char*>(userdata);
-  if (SSL_LOG_STATUS) {
-    Log::Print("PasswordCallback called: size %d rwflag %d password %s\n",
-        size, rwflag, password);
-  }
   if (static_cast<size_t>(size) < strlen(password) + 1) {
     Log::PrintErr("Password buffer too small.\n");
     exit(1);
-    // TODO(whesse): Throw an exception back to Dart here.
-    // TODO(whesse): Find the actual value of size passed in here, and
+    // TODO(24182): Find the actual value of size passed in here, and
     // check for password length longer than this in the Dart function
     // that passes in the password, so we never have this problem.
   }
@@ -339,7 +334,8 @@ int PasswordCallback(char* buf, int size, int rwflag, void* userdata) {
 
 
 void CheckStatus(int status, const char* message, int line) {
-  // TODO(whesse): Take appropriate action on failed calls.  Throw exception.
+  // TODO(24183): Take appropriate action on failed calls,
+  // throw exception that includes all messages from the error stack.
   if (status != 1 && SSL_LOG_STATUS) {
     int error = ERR_get_error();
     Log::PrintErr("Failed: %s line %d\n", message, line);
@@ -353,8 +349,6 @@ void CheckStatus(int status, const char* message, int line) {
 void FUNCTION_NAME(SecurityContext_UsePrivateKey)(Dart_NativeArguments args) {
   SSL_CTX* context = GetSecurityContext(args);
   Dart_Handle filename_object = ThrowIfError(Dart_GetNativeArgument(args, 1));
-  // Check that the type is string or null,
-  // and get the UTF-8 C string value from it.
   const char* filename = NULL;
   if (Dart_IsString(filename_object)) {
     ThrowIfError(Dart_StringToCString(filename_object, &filename));
@@ -363,13 +357,10 @@ void FUNCTION_NAME(SecurityContext_UsePrivateKey)(Dart_NativeArguments args) {
         "File argument to SecurityContext.usePrivateKey is not a String"));
   }
   Dart_Handle password_object = ThrowIfError(Dart_GetNativeArgument(args, 2));
-  // Check that the type is string or null,
-  // and get the UTF-8 C string value from it.
   const char* password = NULL;
   if (Dart_IsString(password_object)) {
     ThrowIfError(Dart_StringToCString(password_object, &password));
   } else if (Dart_IsNull(password_object)) {
-    // Pass the empty string as the password.
     password = "";
   } else {
     Dart_ThrowException(DartUtils::NewDartArgumentError(
@@ -382,7 +373,7 @@ void FUNCTION_NAME(SecurityContext_UsePrivateKey)(Dart_NativeArguments args) {
   int status = SSL_CTX_use_PrivateKey_file(context,
                                            filename,
                                            SSL_FILETYPE_PEM);
-  // TODO(whesse): Handle different expected errors here - file missing,
+  // TODO(24184): Handle different expected errors here - file missing,
   // incorrect password, file not a PEM, and throw exceptions.
   // CheckStatus should also throw an exception in uncaught cases.
   CheckStatus(status, "SSL_CTX_use_PrivateKey_file", __LINE__);
@@ -572,7 +563,7 @@ CObject* SSLFilter::ProcessFilterRequest(const CObjectArray& request) {
     }
     return result;
   } else {
-    // TODO(whesse): Extract the BoringSSL OS error here and return it.
+    // TODO(24185): Extract the BoringSSL OS error here and return it.
     int error_code = 1;
     const char* error_message = "Obsolete PR Error message";
     CObjectArray* result = new CObjectArray(CObject::NewArray(2));
@@ -743,7 +734,6 @@ void SSLFilter::InitializeLibrary() {
 
 
 Dart_Handle SSLFilter::PeerCertificate() {
-  // Get peer certificate X509 object, pass it to
   X509* certificate = SSL_get_peer_certificate(ssl_);
   Dart_Handle x509_object = WrappedX509Certificate(certificate);
   if (Dart_IsError(x509_object)) {
@@ -878,11 +868,13 @@ void SSLFilter::Connect(const char* hostname,
     SetAlpnProtocolList(protocols_handle, ssl_, NULL, false);
     // Sets the hostname in the certificate-checking object, so it is checked
     // against the certificate presented by the server.
-    certificate_checking_parameters_ = SSL_get0_param(ssl_);
+    X509_VERIFY_PARAM* certificate_checking_parameters_ = SSL_get0_param(ssl_);
     hostname_ = strdup(hostname);
     X509_VERIFY_PARAM_set_hostflags(certificate_checking_parameters_, 0);
     X509_VERIFY_PARAM_set1_host(certificate_checking_parameters_,
                                 hostname_, 0);
+    // TODO(24186) free hostname_ if it is not freed when SSL is destroyed.
+    // otherwise, make it a local variable, not a instance field.
   }
   if (is_server_) {
     status = SSL_accept(ssl_);
@@ -1006,7 +998,7 @@ void SSLFilter::Renegotiate(bool use_session_cache,
   // SSL_REQUEST_CERTIFICATE option is also set, so set it.
   request_client_certificate =
       request_client_certificate || require_client_certificate;
-  // TODO(whesse): Implement setting the client certificate parameters,
+  // TODO(24070, 24069): Implement setting the client certificate parameters,
   //   and triggering rehandshake.
 }
 
@@ -1024,7 +1016,6 @@ void SSLFilter::Destroy() {
   Dart_DeletePersistentHandle(string_length_);
   Dart_DeletePersistentHandle(handshake_complete_);
   Dart_DeletePersistentHandle(bad_certificate_callback_);
-  // free(hostname_);  Unclear if this is freed by SSL_free.
 }
 
 
