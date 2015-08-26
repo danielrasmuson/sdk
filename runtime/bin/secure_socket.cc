@@ -431,6 +431,10 @@ void FUNCTION_NAME(SecurityContext_UseCertificateChain)(
   const char* filename = NULL;
   if (Dart_IsString(filename_object)) {
     ThrowIfError(Dart_StringToCString(filename_object, &filename));
+  } else {
+    Dart_ThrowException(DartUtils::NewDartArgumentError(
+        "file argument in SecurityContext.useCertificateChain"
+        " is not a String"));
   }
   int status = SSL_CTX_use_certificate_chain_file(context, filename);
   CheckStatus(status, "SSL_CTX_use_certificate_chain_file", __LINE__);
@@ -444,6 +448,10 @@ void FUNCTION_NAME(SecurityContext_SetClientAuthorities)(
   const char* filename = NULL;
   if (Dart_IsString(filename_object)) {
     ThrowIfError(Dart_StringToCString(filename_object, &filename));
+  } else {
+    Dart_ThrowException(DartUtils::NewDartArgumentError(
+         "file argument in SecurityContext.setClientAuthorities"
+         " is not a String"));
   }
   STACK_OF(X509_NAME)* certificate_names;
   certificate_names = SSL_load_client_CA_file(filename);
